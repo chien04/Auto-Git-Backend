@@ -79,6 +79,25 @@ public class EmailService {
     }
     
     /**
+     * Send general email
+     */
+    public void sendEmail(String toEmail, String subject, String body) {
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(fromEmail);
+            message.setTo(toEmail);
+            message.setSubject(subject);
+            message.setText(body);
+            
+            mailSender.send(message);
+            log.info("Email sent to {}: {}", toEmail, subject);
+        } catch (Exception e) {
+            log.error("Failed to send email to {}: {}", toEmail, e.getMessage());
+            throw new RuntimeException("Failed to send email: " + e.getMessage());
+        }
+    }
+    
+    /**
      * Verify OTP code
      */
     public boolean verifyOTP(String email, String otp) {

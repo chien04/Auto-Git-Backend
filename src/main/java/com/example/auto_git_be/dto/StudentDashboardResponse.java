@@ -8,11 +8,12 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-public class CreateClassRequest {
-    private String className;
-    private String localPath;
-    private LocalDateTime deadline;
+public class StudentDashboardResponse {
+    private int totalCommits;
+    private LocalDateTime lastCommitAt;
+    private int totalClasses;
+    private int activeClasses;
 }

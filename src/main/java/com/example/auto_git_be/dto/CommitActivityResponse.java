@@ -5,14 +5,13 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
+import java.util.Map;
 
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-public class CreateClassRequest {
-    private String className;
-    private String localPath;
-    private LocalDateTime deadline;
+public class CommitActivityResponse {
+    private Map<LocalDate, Integer> dailyCommits; // date -> number of commits that day
 }

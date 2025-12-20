@@ -73,13 +73,38 @@ public class AuthService {
         String googleId = (String) userInfo.get("sub");
         String picture = (String) userInfo.get("picture");
 
-        // Find existing user
+        // Try to find existing user by googleId first, then by email
         User user = userRepository.findByGoogleId(googleId).orElse(null);
         
+        if (user == null) {
+            // No user with this googleId, check if email exists
+            user = userRepository.findByEmail(email).orElse(null);
+            
+            if (user != null) {
+                // User exists with this email but no googleId - merge accounts
+                // Update user with Google info
+                user.setGoogleId(googleId);
+                user.setName(name); // Update name from Google
+                user.setProfilePicture(picture);
+                
+                // Check role compatibility
+                if (!user.getRole().equals(User.UserRole.BOTH)) {
+                    String existingRole = user.getRole().toString();
+                    if (!existingRole.equals(requestedRole)) {
+                        throw new RuntimeException("Tài khoản này đã đăng ký với vai trò " + 
+                            (existingRole.equals("TEACHER") ? "Giáo viên" : "Sinh viên") + 
+                            ". Không thể đăng nhập với vai trò khác.");
+                    }
+                } else {
+                    user.setRole(User.UserRole.valueOf(requestedRole));
+                }
+                userRepository.save(user);
+            }
+        }
+        
         if (user != null) {
-            // User exists - check role compatibility
+            // User exists - check role compatibility (if not already handled above)
             if (!user.getRole().equals(User.UserRole.BOTH)) {
-                // User already has a specific role
                 String existingRole = user.getRole().toString();
                 if (!existingRole.equals(requestedRole)) {
                     throw new RuntimeException("Tài khoản này đã đăng ký với vai trò " + 

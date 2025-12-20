@@ -52,6 +52,9 @@ public class ClassRoom {
     @Column(name = "local_path")
     private String localPath;
     
+    @Column(name = "deadline")
+    private LocalDateTime deadline;
+    
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

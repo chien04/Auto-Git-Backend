@@ -9,10 +9,14 @@ import com.example.auto_git_be.entity.Student;
 import com.example.auto_git_be.entity.User;
 import com.example.auto_git_be.service.AuthService;
 import com.example.auto_git_be.service.ClassRoomService;
+import com.example.auto_git_be.service.StudentService;
 import com.example.auto_git_be.service.WorkspaceService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
+import java.util.Map;
 
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.HashMap;
@@ -33,7 +37,10 @@ public class ClassController {
 
     @Autowired
     private WorkspaceService workspaceService;
-
+    
+    @Autowired
+    private StudentService studentService;
+    
     /**
      * Create a new class (Teacher only)
      */
@@ -48,6 +55,7 @@ public class ClassController {
             CreateClassResponse response = classRoomService.createClass(
                 request.getClassName(), 
                 request.getLocalPath(), 
+                request.getDeadline(),
                 teacher
             );
             return ResponseEntity.ok(response);
@@ -171,6 +179,7 @@ public class ClassController {
                 classInfo.put("classCode", c.getClassCode());
                 classInfo.put("repoUrl", c.getRepoUrl());
                 classInfo.put("studentCount", c.getStudents().size());
+                classInfo.put("deadline", c.getDeadline());
                 return classInfo;
             }).collect(Collectors.toList()));
             
@@ -181,6 +190,7 @@ public class ClassController {
                 classInfo.put("classCode", s.getClassRoom().getClassCode());
                 classInfo.put("repoUrl", s.getClassRoom().getRepoUrl());
                 classInfo.put("branchName", s.getBranchName());
+                classInfo.put("deadline", s.getClassRoom().getDeadline());
                 return classInfo;
             }).collect(Collectors.toList()));
             
@@ -208,6 +218,30 @@ public class ClassController {
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
+        }
+    }
+    
+    /**
+     * Remove student from class (Teacher only)
+     */
+    @DeleteMapping("/{classCode}/student/{studentId}")
+    public ResponseEntity<Map<String, String>> removeStudent(
+            @PathVariable String classCode,
+            @PathVariable String studentId,
+            @RequestHeader("Authorization") String authHeader) {
+        try {
+            String token = authHeader.substring(7);
+            User teacher = authService.getUserFromToken(token);
+            
+            classRoomService.removeStudentFromClass(classCode, Long.parseLong(studentId), teacher);
+            
+            Map<String, String> response = new HashMap<>();
+            response.put("message", "Student removed successfully");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
         }
     }
     
@@ -403,6 +437,45 @@ public class ClassController {
     }
 
     /**
+     * Update commit count for a student (called after push)
+     */
+    @PostMapping("/{classCode}/student/update-commits")
+    public ResponseEntity<Map<String, Object>> updateStudentCommits(
+            @PathVariable String classCode,
+            @RequestHeader("Authorization") String authHeader) {
+        try {
+            String token = authHeader.substring(7);
+            User user = authService.getUserFromToken(token);
+
+            System.out.println("[UPDATE COMMITS] Request from user: " + user.getEmail() + " for class: " + classCode);
+
+            ClassRoom classroom = classRoomService.getClassByCode(classCode);
+            Student student = studentService.findByUserAndClassRoom(user, classroom)
+                    .orElseThrow(() -> new RuntimeException("Student not found"));
+
+            System.out.println("[UPDATE COMMITS] Found student: " + student.getStudentName() + ", branch: " + student.getBranchName());
+
+            // Update commit count using StudentService
+            Student updatedStudent = studentService.updateCommitCount(student, classroom);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("commitCount", updatedStudent.getCommitCount());
+            response.put("lastCommitAt", updatedStudent.getLastCommitAt());
+            response.put("message", "Commit count updated successfully");
+            
+            System.out.println("[UPDATE COMMITS] Success! New count: " + updatedStudent.getCommitCount());
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            System.err.println("[UPDATE COMMITS] Error: " + e.getMessage());
+            e.printStackTrace();
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
+    }
+
+    /**
      * Get local path for class (Teacher)
      */
     @GetMapping("/{classCode}/localPath")
@@ -431,6 +504,35 @@ public class ClassController {
                     return ResponseEntity.status(403).build();
                 }
             }
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    /**
+     * Check if deadline has passed (Student)
+     */
+    @GetMapping("/{classCode}/deadline/check")
+    public ResponseEntity<Map<String, Object>> checkDeadline(
+            @PathVariable String classCode,
+            @RequestHeader("Authorization") String authHeader) {
+        try {
+            ClassRoom classroom = classRoomService.getClassByCode(classCode);
+            Map<String, Object> response = new HashMap<>();
+            
+            if (classroom.getDeadline() == null) {
+                response.put("hasDeadline", false);
+                response.put("canPush", true);
+                return ResponseEntity.ok(response);
+            }
+            
+            boolean isPast = java.time.LocalDateTime.now().isAfter(classroom.getDeadline());
+            response.put("hasDeadline", true);
+            response.put("deadline", classroom.getDeadline().toString());
+            response.put("canPush", !isPast);
+            response.put("message", isPast ? "Đã hết hạn nộp bài!" : "Vẫn còn thời gian nộp bài");
             
             return ResponseEntity.ok(response);
         } catch (Exception e) {

@@ -41,7 +41,7 @@ public class ClassRoomService {
      * Create a new classroom with GitHub repository
      */
     @Transactional
-    public CreateClassResponse createClass(String className, String localPath, User teacher) {
+    public CreateClassResponse createClass(String className, String localPath, java.time.LocalDateTime deadline, User teacher) {
         try {
             // Generate unique class code
             String classCode = generateUniqueClassCode();
@@ -68,6 +68,7 @@ public class ClassRoomService {
                     .teacher(teacher)
                     .localPath(fullPath)
                     .isActive(true)
+                    .deadline(deadline)
                     .build();
 
             classRoom = classRoomRepository.save(classRoom);
@@ -88,6 +89,7 @@ public class ClassRoomService {
                     .className(classRoom.getName())
                     .token(gitHubService.getToken())
                     .branch("teacher")
+                    .deadline(classRoom.getDeadline())
                     .build();
 
         } catch (Exception e) {
@@ -116,6 +118,8 @@ public class ClassRoomService {
                         .branch(existingStudent.getBranchName())
                         .token(existingStudent.getGithubToken())
                         .studentId(existingStudent.getId().toString())
+                        .deadline(classRoom.getDeadline())
+                        .deadline(classRoom.getDeadline())
                         .build();
             }
 
@@ -166,7 +170,9 @@ public class ClassRoomService {
                     .repoUrl(classRoom.getRepoUrl())
                     .branch(branchName)
                     .token(studentToken)
+                    .deadline(classRoom.getDeadline())
                     .studentId(student.getId().toString())
+                    .deadline(classRoom.getDeadline())
                     .build();
 
         } catch (Exception e) {
@@ -278,6 +284,39 @@ public class ClassRoomService {
     }
     
     /**
+     * Teacher removes a student from class
+     */
+    @Transactional
+    public void removeStudentFromClass(String classCode, Long studentId, User teacher) {
+        try {
+            ClassRoom classRoom = classRoomRepository.findByClassCode(classCode)
+                    .orElseThrow(() -> new RuntimeException("Class not found"));
+            
+            // Verify teacher ownership
+            if (!classRoom.getTeacher().getId().equals(teacher.getId())) {
+                throw new RuntimeException("Only the teacher can remove students from their class");
+            }
+            
+            Student student = studentRepository.findById(studentId)
+                    .orElseThrow(() -> new RuntimeException("Student not found"));
+            
+            // Verify student belongs to this class
+            if (!student.getClassRoom().getId().equals(classRoom.getId())) {
+                throw new RuntimeException("Student not in this class");
+            }
+            
+            // Delete branch from GitHub
+            gitHubService.deleteBranch(classRoom.getRepoName(), student.getBranchName());
+            
+            // Delete student enrollment
+            studentRepository.delete(student);
+            
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to remove student: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
      * Teacher deletes a class - delete entire repository
      */
     @Transactional
@@ -350,5 +389,12 @@ public class ClassRoomService {
         } catch (Exception e) {
             throw new RuntimeException("Failed to get commit URL: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Get all classes by teacher
+     */
+    public List<ClassRoom> getClassesByTeacher(User teacher) {
+        return classRoomRepository.findByTeacher(teacher);
     }
 }
