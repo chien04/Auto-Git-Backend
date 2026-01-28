@@ -2,6 +2,7 @@ package com.example.auto_git_be.service;
 
 import com.example.auto_git_be.entity.ClassRoom;
 import com.example.auto_git_be.entity.Student;
+import com.example.auto_git_be.entity.StudentAssignment;
 import com.example.auto_git_be.entity.User;
 import com.example.auto_git_be.repository.StudentRepository;
 import org.slf4j.Logger;
@@ -28,48 +29,19 @@ public class StudentService {
     private GitHubService githubService;
 
     /**
-     * Update commit count for a student from GitHub
+     * Update commit count for a student assignment from GitHub
+     * @deprecated This method is deprecated. Use StudentAssignmentService.updateCommitCount() instead.
+     * This method kept for backward compatibility but should work with StudentAssignment entity.
      */
+    @Deprecated
     public Student updateCommitCount(Student student, ClassRoom classroom) throws Exception {
-        try {
-            log.info("Updating commit count for student: {} in class: {}", 
-                    student.getStudentName(), classroom.getClassCode());
-            
-            // Get repo full name
-            String repoUrl = classroom.getRepoUrl();
-            String repoFullName = repoUrl
-                    .replace("https://github.com/", "")
-                    .replace(".git", "")
-                    .trim();
-            
-            log.info("Repo: {}, Branch: {}", repoFullName, student.getBranchName());
-            
-            // Get commit count from GitHub
-            int commitCount = githubService.getCommitCount(repoFullName, student.getBranchName());
-            
-            log.info("GitHub API returned commit count: {}", commitCount);
-            
-            // Update student
-            Integer oldCount = student.getCommitCount();
-            student.setCommitCount(commitCount);
-            
-            // Update lastCommitAt if there are new commits
-            if (commitCount > 0 && (oldCount == null || commitCount > oldCount)) {
-                student.setLastCommitAt(LocalDateTime.now());
-                log.info("Updated lastCommitAt for student: {}", student.getStudentName());
-            }
-            
-            Student savedStudent = studentRepository.save(student);
-            log.info("Successfully updated student {} commit count from {} to {}", 
-                    student.getStudentName(), oldCount, commitCount);
-            
-            return savedStudent;
-            
-        } catch (Exception e) {
-            log.error("Failed to update commit count for student {}: {}", 
-                    student.getStudentName(), e.getMessage(), e);
-            throw e;
-        }
+        // This method is now invalid with the new architecture
+        // Student entity no longer has commitCount, branchName, etc.
+        // These fields are now in StudentAssignment entity
+        throw new UnsupportedOperationException(
+                "updateCommitCount(Student, ClassRoom) is no longer supported. " +
+                "Use StudentAssignmentService.updateCommitCount(StudentAssignment) instead."
+        );
     }
 
     /**
@@ -77,6 +49,13 @@ public class StudentService {
      */
     public Optional<Student> findByUserAndClassRoom(User user, ClassRoom classRoom) {
         return studentRepository.findByUserAndClassRoom(user, classRoom);
+    }
+
+    /**
+     * Get student by user and classroom (non-Optional version)
+     */
+    public Student getStudentByUserAndClass(User user, ClassRoom classRoom) {
+        return findByUserAndClassRoom(user, classRoom).orElse(null);
     }
 
     /**
@@ -131,31 +110,39 @@ public class StudentService {
         // Get all enrollments for this user
         List<Student> enrollments = studentRepository.findByUser(user);
 
-        // For each enrollment, get commit history from GitHub
+        // For each enrollment, get commit history from all student assignments
         for (Student student : enrollments) {
             try {
-                ClassRoom classRoom = student.getClassRoom();
-                String repoName = classRoom.getRepoName();
-                String branchName = student.getBranchName();
+                // Get all assignments this student is enrolled in
+                List<StudentAssignment> studentAssignments = student.getAssignments();
+                
+                for (StudentAssignment studentAssignment : studentAssignments) {
+                    try {
+                        // Get assignment and repository info
+                        com.example.auto_git_be.entity.Assignment assignment = studentAssignment.getAssignment();
+                        String repoName = assignment.getRepoName();
+                        String branchName = studentAssignment.getBranchName();
 
-                // Get commits from GitHub API
-                List<org.kohsuke.github.GHCommit> commits = githubService.getCommits(repoName, branchName);
+                        // Get commits from GitHub API
+                        List<org.kohsuke.github.GHCommit> commits = githubService.getCommits(repoName, branchName);
 
-                // Count commits per day
-                for (org.kohsuke.github.GHCommit commit : commits) {
-                    // Get commit date
-                    java.util.Date commitDate = commit.getCommitDate();
-                    java.time.LocalDate commitLocalDate = commitDate.toInstant()
-                            .atZone(java.time.ZoneId.systemDefault())
-                            .toLocalDate();
+                        // Count commits per day
+                        for (org.kohsuke.github.GHCommit commit : commits) {
+                            // Get commit date
+                            java.util.Date commitDate = commit.getCommitDate();
+                            java.time.LocalDate commitLocalDate = commitDate.toInstant()
+                                    .atZone(java.time.ZoneId.systemDefault())
+                                    .toLocalDate();
 
-                    // Only count commits in last 28 days
-                    if (!commitLocalDate.isBefore(today.minusDays(27)) && !commitLocalDate.isAfter(today)) {
-                        activityMap.put(commitLocalDate, activityMap.getOrDefault(commitLocalDate, 0) + 1);
+                            // Only count commits in last 28 days
+                            if (!commitLocalDate.isBefore(today.minusDays(27)) && !commitLocalDate.isAfter(today)) {
+                                activityMap.put(commitLocalDate, activityMap.getOrDefault(commitLocalDate, 0) + 1);
+                            }
+                        }
+                    } catch (Exception e) {
                     }
                 }
             } catch (Exception e) {
-                System.err.println("Failed to get commit activity for student " + student.getId() + ": " + e.getMessage());
             }
         }
 

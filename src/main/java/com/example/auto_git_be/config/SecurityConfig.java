@@ -31,6 +31,8 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/health").permitAll()
+                .requestMatchers("/api/assignment/update-score").permitAll() // GitHub Actions webhook
+                .requestMatchers("/ws/**").permitAll()
                 .anyRequest().authenticated()
             )
             .sessionManagement(session -> session
@@ -44,10 +46,10 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("*")); // In production, specify exact origins
+        configuration.setAllowedOriginPatterns(List.of("*")); // Use patterns instead of origins for wildcard
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
-        configuration.setAllowCredentials(false);
+        configuration.setAllowCredentials(true); // Enable credentials
         
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);

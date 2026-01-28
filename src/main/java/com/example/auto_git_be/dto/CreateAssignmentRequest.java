@@ -5,12 +5,15 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class CreateClassResponse {
-    private String classId;
+public class CreateAssignmentRequest {
     private String classCode;
-    private String className;
+    private String title;
+    private String description;
+    private LocalDateTime deadline;
 }

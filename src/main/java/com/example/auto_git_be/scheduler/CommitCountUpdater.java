@@ -1,9 +1,11 @@
 package com.example.auto_git_be.scheduler;
 
+import com.example.auto_git_be.entity.Assignment;
 import com.example.auto_git_be.entity.ClassRoom;
-import com.example.auto_git_be.entity.Student;
+import com.example.auto_git_be.entity.StudentAssignment;
+import com.example.auto_git_be.repository.AssignmentRepository;
 import com.example.auto_git_be.repository.ClassRoomRepository;
-import com.example.auto_git_be.service.StudentService;
+import com.example.auto_git_be.service.StudentAssignmentService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -16,62 +18,54 @@ public class CommitCountUpdater {
 
     private static final Logger log = LoggerFactory.getLogger(CommitCountUpdater.class);
 
-    private final StudentService studentService;
-    private final ClassRoomRepository classRoomRepository;
+    private final StudentAssignmentService studentAssignmentService;
+    private final AssignmentRepository assignmentRepository;
 
-    public CommitCountUpdater(StudentService studentService,
-                              ClassRoomRepository classRoomRepository) {
-        this.studentService = studentService;
-        this.classRoomRepository = classRoomRepository;
+    public CommitCountUpdater(StudentAssignmentService studentAssignmentService,
+                              AssignmentRepository assignmentRepository) {
+        this.studentAssignmentService = studentAssignmentService;
+        this.assignmentRepository = assignmentRepository;
     }
 
     /**
-     * Update commit counts for all students every 10 minutes
+     * Update commit counts for all student assignments every 10 minutes
      */
     @Scheduled(fixedDelay = 600000) // 10 minutes
     public void updateAllCommitCounts() {
-        log.info("=== Starting commit count update for all students ===");
-
         try {
-            // Get all active classrooms
-            List<ClassRoom> classrooms = classRoomRepository.findAll();
+            // Get all active assignments directly
+            List<Assignment> assignments = assignmentRepository.findAll();
 
             int updatedCount = 0;
             int errorCount = 0;
 
-            for (ClassRoom classroom : classrooms) {
-                if (!classroom.getIsActive()) {
+            for (Assignment assignment : assignments) {
+                if (!assignment.getIsActive()) {
                     continue;
                 }
+                
+                // Get all student assignments for this assignment
+                List<StudentAssignment> studentAssignments = studentAssignmentService.findByAssignment(assignment);
 
-                List<Student> students = studentService.findByClassRoom(classroom);
+                for (StudentAssignment studentAssignment : studentAssignments) {
+                        try {
+                            Integer oldCount = studentAssignment.getCommitCount();
+                            
+                            // Update commit count using StudentAssignmentService
+                            StudentAssignment updated = studentAssignmentService.updateCommitCount(studentAssignment);
+                            
+                            // Only count as updated if value actually changed
+                            if (oldCount == null || !oldCount.equals(updated.getCommitCount())) {
+                                updatedCount++;
+                            }
 
-                for (Student student : students) {
-                    try {
-                        Integer oldCount = student.getCommitCount();
-                        
-                        // Update commit count using StudentService
-                        Student updatedStudent = studentService.updateCommitCount(student, classroom);
-                        
-                        // Only count as updated if value actually changed
-                        if (oldCount == null || !oldCount.equals(updatedStudent.getCommitCount())) {
-                            updatedCount++;
-                            log.debug("Updated commit count for {}: {} -> {}", 
-                                    student.getStudentName(), oldCount, updatedStudent.getCommitCount());
+                        } catch (Exception e) {
+                            errorCount++;
                         }
-
-                    } catch (Exception e) {
-                        log.error("Failed to update commit count for student {}: {}", 
-                                student.getStudentName(), e.getMessage());
-                        errorCount++;
                     }
                 }
-            }
-
-            log.info("Commit count update completed: {} updated, {} errors", updatedCount, errorCount);
 
         } catch (Exception e) {
-            log.error("Error in commit count update job: {}", e.getMessage(), e);
         }
     }
 }

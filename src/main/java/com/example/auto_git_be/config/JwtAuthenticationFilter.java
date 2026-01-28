@@ -24,6 +24,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private JwtService jwtService;
 
     @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
+        String path = request.getRequestURI();
+        return path.startsWith("/ws");
+    }
+
+    @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         
@@ -52,7 +58,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 }
             }
         } catch (Exception e) {
-            logger.error("Cannot set user authentication: {}", e);
         }
 
         filterChain.doFilter(request, response);

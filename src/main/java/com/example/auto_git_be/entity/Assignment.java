@@ -13,35 +13,47 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "classrooms")
+@Table(name = "assignments")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ClassRoom {
+public class Assignment {
     
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     
-    @Column(nullable = false)
-    private String name;
-    
-    @Column(name = "class_code", nullable = false, unique = true, length = 8)
-    private String classCode;
-    
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "teacher_id", nullable = false)
-    private User teacher;
+    @JoinColumn(name = "classroom_id", nullable = false)
+    private ClassRoom classRoom;
     
-    @OneToMany(mappedBy = "classRoom", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Assignment> assignments = new ArrayList<>();
+    @Column(nullable = false)
+    private String title;
     
-    @OneToMany(mappedBy = "classRoom", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Student> students = new ArrayList<>();
+    @Column(columnDefinition = "TEXT")
+    private String description;
+    
+    @Column(name = "assignment_code", nullable = false, unique = true, length = 8)
+    private String assignmentCode;
+    
+    @Column(name = "repo_url", nullable = false)
+    private String repoUrl;
+    
+    @Column(name = "repo_name", nullable = false)
+    private String repoName;
+    
+    @Column(name = "github_repo_id")
+    private Long githubRepoId;
+    
+    @OneToMany(mappedBy = "assignment", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<StudentAssignment> studentAssignments = new ArrayList<>();
     
     @Column(name = "is_active")
     private Boolean isActive = true;
+    
+    @Column(name = "deadline")
+    private LocalDateTime deadline;
     
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

@@ -48,8 +48,6 @@ public class AuthService {
                 "&scope=openid%20email%20profile" +
                 "&access_type=offline" +
                 "&prompt=consent"; // Force consent screen to avoid cache issues
-
-        System.out.println("Generated OAuth URL: " + authUrl);
         
         return GoogleAuthUrlResponse.builder()
                 .authUrl(authUrl)
@@ -158,8 +156,6 @@ public class AuthService {
         params.add("client_secret", googleClientSecret);
         params.add("redirect_uri", redirectUriForExchange);
         params.add("grant_type", "authorization_code");
-
-        System.out.println("Exchanging code for token with redirect_uri: " + redirectUriForExchange);
 
         HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(params, headers);
 

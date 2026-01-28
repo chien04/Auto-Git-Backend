@@ -15,5 +15,4 @@ public interface ClassRoomRepository extends JpaRepository<ClassRoom, Long> {
     List<ClassRoom> findByTeacher(User teacher);
     List<ClassRoom> findByTeacherAndIsActive(User teacher, Boolean isActive);
     boolean existsByClassCode(String classCode);
-    List<ClassRoom> findByDeadlineBetween(LocalDateTime start, LocalDateTime end);
 }

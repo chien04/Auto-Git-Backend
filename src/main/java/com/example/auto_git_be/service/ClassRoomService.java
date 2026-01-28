@@ -41,55 +41,25 @@ public class ClassRoomService {
      * Create a new classroom with GitHub repository
      */
     @Transactional
-    public CreateClassResponse createClass(String className, String localPath, java.time.LocalDateTime deadline, User teacher) {
+    public CreateClassResponse createClass(String className, User teacher) {
         try {
             // Generate unique class code
             String classCode = generateUniqueClassCode();
-
-            // Create GitHub repository
-            String repoName = sanitizeRepoName(className + "-" + classCode);
-            String description = "Classroom repository for " + className;
             
-            GHRepository ghRepo = gitHubService.createRepository(repoName, description);
-            
-            // Create teacher branch
-            gitHubService.createBranch(ghRepo.getFullName(), "teacher", ghRepo.getDefaultBranch());
-            
-            // Create full path: parentPath/className-classCode
-            String fullPath = localPath + "/" + className + "-" + classCode;
-            
-            // Create classroom entity
+            // Create classroom entity (no repository - repos are per assignment now)
             ClassRoom classRoom = ClassRoom.builder()
                     .name(className)
                     .classCode(classCode)
-                    .repoUrl(ghRepo.getHtmlUrl().toString())
-                    .repoName(ghRepo.getFullName())
-                    .githubRepoId(ghRepo.getId())
                     .teacher(teacher)
-                    .localPath(fullPath)
                     .isActive(true)
-                    .deadline(deadline)
                     .build();
 
             classRoom = classRoomRepository.save(classRoom);
 
-            // Clone repository to teacher's chosen workspace
-            try {
-                workspaceService.setupClassroomWorkspace(classRoom, List.of());
-                System.out.println("Repository cloned to: " + fullPath);
-            } catch (Exception e) {
-                System.err.println("Warning: Failed to clone repository: " + e.getMessage());
-                // Don't fail the whole operation if clone fails
-            }
-
             return CreateClassResponse.builder()
                     .classId(classRoom.getId().toString())
                     .classCode(classRoom.getClassCode())
-                    .repoUrl(classRoom.getRepoUrl())
                     .className(classRoom.getName())
-                    .token(gitHubService.getToken())
-                    .branch("teacher")
-                    .deadline(classRoom.getDeadline())
                     .build();
 
         } catch (Exception e) {
@@ -103,76 +73,32 @@ public class ClassRoomService {
     @Transactional
     public JoinClassResponse joinClass(String studentName, String classCode, String localPath, User user) {
         try {
-            // Find a classroom
+            // Find classroom
             ClassRoom classRoom = classRoomRepository.findByClassCode(classCode)
                     .orElseThrow(() -> new RuntimeException("Class not found with code: " + classCode));
 
-            // Check if a student already enrolled
+            // Check if student already enrolled
             if (studentRepository.existsByUserAndClassRoom(user, classRoom)) {
                 // Return existing enrollment
                 Student existingStudent = studentRepository.findByUserAndClassRoom(user, classRoom)
                         .orElseThrow(() -> new RuntimeException("Student enrollment error"));
                 
                 return JoinClassResponse.builder()
-                        .repoUrl(classRoom.getRepoUrl())
-                        .branch(existingStudent.getBranchName())
-                        .token(existingStudent.getGithubToken())
                         .studentId(existingStudent.getId().toString())
-                        .deadline(classRoom.getDeadline())
-                        .deadline(classRoom.getDeadline())
                         .build();
             }
-
-            // Create student branch name - use student name instead of user ID
-            String sanitizedName = studentName.replaceAll("[^a-zA-Z0-9_-]", "_").toLowerCase();
-            String branchName = "student/" + sanitizedName;
-
-            // Create branch in GitHub
-            gitHubService.createBranch(classRoom.getRepoName(), branchName, "main");
-
-            // Generate token for student (simplified - use actual token generation in production)
-            String studentToken = gitHubService.generateStudentToken(classRoom.getRepoName(), branchName);
-
-            // Create full path: parentPath/classCode-student-studentName
-            String fullPath = localPath + "/" + classCode + "-student-" + sanitizedName;
 
             // Create student enrollment
             Student student = Student.builder()
                     .user(user)
                     .classRoom(classRoom)
                     .studentName(studentName)
-                    .branchName(branchName)
-                    .githubToken(studentToken)
-                    .localPath(fullPath)
-                    .commitCount(0)
                     .build();
 
             student = studentRepository.save(student);
 
-            // Create worktree for this student in teacher's workspace
-            try {
-                String classroomPath = workspaceService.getClassroomPath(classRoom);
-                java.io.File classroomDir = new java.io.File(classroomPath);
-                
-                if (classroomDir.exists() && new java.io.File(classroomDir, ".git").exists()) {
-                    // Teacher's workspace exists, create worktree
-                    workspaceService.updateWorkspace(classRoom, List.of(student));
-                    System.out.println("Created worktree for student: " + studentName);
-                } else {
-                    System.out.println("Teacher workspace not found yet, worktree will be created when teacher opens workspace");
-                }
-            } catch (Exception e) {
-                System.err.println("Warning: Failed to create worktree: " + e.getMessage());
-                // Don't fail student join if worktree creation fails
-            }
-
             return JoinClassResponse.builder()
-                    .repoUrl(classRoom.getRepoUrl())
-                    .branch(branchName)
-                    .token(studentToken)
-                    .deadline(classRoom.getDeadline())
                     .studentId(student.getId().toString())
-                    .deadline(classRoom.getDeadline())
                     .build();
 
         } catch (Exception e) {
@@ -261,7 +187,9 @@ public class ClassRoomService {
     }
     
     /**
-     * Student leaves a class - delete branch
+     * Student leaves a class
+     * Note: With new architecture, this only removes the student from the class.
+     * Student's branches in assignment repos are NOT deleted automatically.
      */
     @Transactional
     public void leaveClass(String classCode, User user) {
@@ -272,8 +200,8 @@ public class ClassRoomService {
             Student student = studentRepository.findByUserAndClassRoom(user, classRoom)
                     .orElseThrow(() -> new RuntimeException("Student not enrolled in this class"));
             
-            // Delete branch from GitHub
-            gitHubService.deleteBranch(classRoom.getRepoName(), student.getBranchName());
+            // With new architecture: branches belong to assignments, not class
+            // StudentAssignments will be cascade deleted due to orphanRemoval in Student entity
             
             // Delete student enrollment
             studentRepository.delete(student);
@@ -285,6 +213,7 @@ public class ClassRoomService {
     
     /**
      * Teacher removes a student from class
+     * Note: With new architecture, student's branches in assignment repos are NOT deleted.
      */
     @Transactional
     public void removeStudentFromClass(String classCode, Long studentId, User teacher) {
@@ -305,8 +234,8 @@ public class ClassRoomService {
                 throw new RuntimeException("Student not in this class");
             }
             
-            // Delete branch from GitHub
-            gitHubService.deleteBranch(classRoom.getRepoName(), student.getBranchName());
+            // With new architecture: branches belong to assignments, not class
+            // StudentAssignments will be cascade deleted
             
             // Delete student enrollment
             studentRepository.delete(student);
@@ -317,7 +246,9 @@ public class ClassRoomService {
     }
     
     /**
-     * Teacher deletes a class - delete entire repository
+     * Teacher deletes a class
+     * Note: With new architecture, class doesn't have repository.
+     * Assignment repositories will be cascade deleted through Assignment entities.
      */
     @Transactional
     public void deleteClass(String classCode, User teacher) {
@@ -330,8 +261,8 @@ public class ClassRoomService {
                 throw new RuntimeException("Only the teacher who created the class can delete it");
             }
             
-            // Delete repository from GitHub
-            gitHubService.deleteRepository(classRoom.getRepoName());
+            // With new architecture: repos belong to assignments, not class
+            // AssignmentService should handle deleting assignment repos
             
             // Delete all student enrollments
             List<Student> students = studentRepository.findByClassRoom(classRoom);
@@ -348,15 +279,22 @@ public class ClassRoomService {
 
     /**
      * Get commits for a specific branch
+     * @deprecated This method is deprecated with the new architecture.
+     * Use AssignmentService.getCommits(assignmentCode, branchName) instead.
      */
+    @Deprecated
     public List<Map<String, Object>> getCommits(String classCode, String branchName) {
+        throw new UnsupportedOperationException(
+                "getCommits(classCode, branchName) is no longer supported. " +
+                        "With the new architecture, classes don't have repositories. " +
+                        "Use AssignmentService.getCommits(assignmentCode, branchName) instead."
+        );
+    }
+        /*
         try {
-            System.out.println("ClassRoomService.getCommits called with classCode: " + classCode + ", branchName: " + branchName);
             
             ClassRoom classRoom = classRoomRepository.findByClassCode(classCode)
                     .orElseThrow(() -> new RuntimeException("Class not found"));
-            
-            System.out.println("Found classroom: " + classRoom.getName() + ", repo: " + classRoom.getRepoName());
             
             List<org.kohsuke.github.GHCommit> ghCommits = gitHubService.getCommits(classRoom.getRepoName(), branchName);
             
@@ -370,7 +308,6 @@ public class ClassRoomService {
                 commits.add(commitInfo);
             }
             
-            System.out.println("Returning " + commits.size() + " commits");
             return commits;
         } catch (Exception e) {
             throw new RuntimeException("Failed to get commits: " + e.getMessage(), e);
@@ -379,16 +316,16 @@ public class ClassRoomService {
 
     /**
      * Get commit URL for viewing code
+     * @deprecated This method is deprecated with the new architecture.
+     * Use AssignmentService.getCommitUrl(assignmentCode, commitSha) instead.
      */
+    @Deprecated
     public String getCommitUrl(String classCode, String branchName, String commitSha) {
-        try {
-            ClassRoom classRoom = classRoomRepository.findByClassCode(classCode)
-                    .orElseThrow(() -> new RuntimeException("Class not found"));
-            
-            return gitHubService.getCommitUrl(classRoom.getRepoName(), commitSha);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to get commit URL: " + e.getMessage(), e);
-        }
+        throw new UnsupportedOperationException(
+                "getCommitUrl(classCode, branchName, commitSha) is no longer supported. " +
+                "With the new architecture, classes don't have repositories. " +
+                "Use AssignmentService.getCommitUrl(assignmentCode, commitSha) instead."
+        );
     }
 
     /**

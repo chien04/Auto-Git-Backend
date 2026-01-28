@@ -6,10 +6,12 @@ import com.example.auto_git_be.dto.StudentDashboardResponse;
 import com.example.auto_git_be.dto.TeacherDashboardResponse;
 import com.example.auto_git_be.entity.ClassRoom;
 import com.example.auto_git_be.entity.Student;
+import com.example.auto_git_be.entity.StudentAssignment;
 import com.example.auto_git_be.entity.User;
 import com.example.auto_git_be.service.AuthService;
 import com.example.auto_git_be.service.ClassRoomService;
 import com.example.auto_git_be.service.StudentService;
+import com.example.auto_git_be.service.StudentAssignmentService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -32,6 +34,9 @@ public class DashboardController {
     @Autowired
     private StudentService studentService;
 
+    @Autowired
+    private StudentAssignmentService studentAssignmentService;
+
     /**
      * Get dashboard data for student
      */
@@ -45,17 +50,24 @@ public class DashboardController {
             // Get all classes student is enrolled in
             List<Student> enrollments = studentService.findByUser(user);
 
-            // Calculate total commits across all classes
-            int totalCommits = enrollments.stream()
-                    .mapToInt(s -> s.getCommitCount() != null ? s.getCommitCount() : 0)
-                    .sum();
-
-            // Find most recent commit
-            LocalDateTime lastCommitAt = enrollments.stream()
-                    .map(Student::getLastCommitAt)
-                    .filter(date -> date != null)
-                    .max(LocalDateTime::compareTo)
-                    .orElse(null);
+            // Get all assignments student is working on
+            int totalCommits = 0;
+            LocalDateTime lastCommitAt = null;
+            
+            for (Student student : enrollments) {
+                List<StudentAssignment> assignments = student.getAssignments();
+                for (StudentAssignment sa : assignments) {
+                    int commits = sa.getCommitCount() != null ? sa.getCommitCount() : 0;
+                    totalCommits += commits;
+                    
+                    // Find most recent commit
+                    if (sa.getLastCommitAt() != null) {
+                        if (lastCommitAt == null || sa.getLastCommitAt().isAfter(lastCommitAt)) {
+                            lastCommitAt = sa.getLastCommitAt();
+                        }
+                    }
+                }
+            }
 
             // Count total and active classes
             int totalClasses = enrollments.size();
@@ -72,7 +84,6 @@ public class DashboardController {
 
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            e.printStackTrace();
             return ResponseEntity.badRequest().build();
         }
     }
@@ -106,11 +117,18 @@ public class DashboardController {
                 totalStudents += students.size();
 
                 for (Student student : students) {
-                    int commits = student.getCommitCount() != null ? student.getCommitCount() : 0;
-                    totalCommits += commits;
+                    // Get all assignments for this student
+                    List<StudentAssignment> assignments = student.getAssignments();
+                    int studentTotalCommits = 0;
+                    
+                    for (StudentAssignment sa : assignments) {
+                        int commits = sa.getCommitCount() != null ? sa.getCommitCount() : 0;
+                        studentTotalCommits += commits;
+                        totalCommits += commits;
+                    }
 
-                    // Considered "submitted" if has more than 1 commit (excluding init)
-                    if (commits > 1) {
+                    // Considered "submitted" if has more than 1 commit total (excluding init)
+                    if (studentTotalCommits > 1) {
                         studentsSubmitted++;
                     }
                 }
@@ -140,7 +158,6 @@ public class DashboardController {
 
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            e.printStackTrace();
             return ResponseEntity.badRequest().build();
         }
     }
@@ -163,7 +180,6 @@ public class DashboardController {
 
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            e.printStackTrace();
             return ResponseEntity.badRequest().build();
         }
     }
@@ -187,8 +203,16 @@ public class DashboardController {
                 int studentsSubmitted = 0;
 
                 for (Student student : students) {
-                    int commits = student.getCommitCount() != null ? student.getCommitCount() : 0;
-                    if (commits > 1) {
+                    // Get all assignments for this student
+                    List<StudentAssignment> assignments = student.getAssignments();
+                    int studentTotalCommits = 0;
+                    
+                    for (StudentAssignment sa : assignments) {
+                        int commits = sa.getCommitCount() != null ? sa.getCommitCount() : 0;
+                        studentTotalCommits += commits;
+                    }
+                    
+                    if (studentTotalCommits > 1) {
                         studentsSubmitted++;
                     }
                 }
@@ -218,7 +242,6 @@ public class DashboardController {
 
             return ResponseEntity.ok(statistics);
         } catch (Exception e) {
-            e.printStackTrace();
             return ResponseEntity.badRequest().build();
         }
     }

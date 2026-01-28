@@ -1,0 +1,12 @@
+package com.example.auto_git_be.dto;
+
+import lombok.Data;
+
+@Data
+public class ScoreUpdateRequest {
+    private String repoFullName;
+    private String branchName;
+    private Integer score; // Score from GitHub Actions (0-100)
+    private Integer passedTests;
+    private Integer totalTests;
+}

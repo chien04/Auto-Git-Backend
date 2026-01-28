@@ -9,39 +9,37 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
 
+/**
+ * Stores teacher-specific information for assignments
+ * Allows multiple teachers to work on same assignment with different local paths
+ */
 @Entity
-@Table(name = "classrooms")
+@Table(name = "teacher_assignments", 
+       uniqueConstraints = @UniqueConstraint(columnNames = {"teacher_id", "assignment_id"}))
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ClassRoom {
+public class TeacherAssignment {
     
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     
-    @Column(nullable = false)
-    private String name;
-    
-    @Column(name = "class_code", nullable = false, unique = true, length = 8)
-    private String classCode;
-    
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "teacher_id", nullable = false)
-    private User teacher;
+    private User teacher; // Main teacher or sub-teacher
     
-    @OneToMany(mappedBy = "classRoom", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Assignment> assignments = new ArrayList<>();
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assignment_id", nullable = false)
+    private Assignment assignment;
     
-    @OneToMany(mappedBy = "classRoom", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Student> students = new ArrayList<>();
+    @Column(name = "local_path", length = 500)
+    private String localPath; // Teacher's local workspace path
     
-    @Column(name = "is_active")
-    private Boolean isActive = true;
+    @Column(name = "role", length = 20)
+    private String role; // "MAIN" or "SUB"
     
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

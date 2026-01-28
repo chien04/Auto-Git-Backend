@@ -9,8 +9,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class CreateClassResponse {
-    private String classId;
-    private String classCode;
-    private String className;
+public class JoinAssignmentRequest {
+    private String assignmentCode;
+    private String localPath;
 }

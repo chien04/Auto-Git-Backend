@@ -32,6 +32,35 @@ build/
 ### VS Code ###
 .vscode/
 
+### Environment Variables ###
 .env
 .env.*
+!.env.example
 
+### OS ###
+.DS_Store
+Thumbs.db
+
+### Logs ###
+*.log
+*.log.*
+
+### Database ###
+*.db
+*.sqlite
+*.sqlite3
+
+### Temporary files ###
+*.tmp
+*.temp
+*.swp
+*~
+
+### Maven ###
+mvnw
+mvnw.cmd
+.mvn/
+
+### Application specific ###
+# Không ignore các file migration SQL
+!src/main/resources/db/migration/*.sql

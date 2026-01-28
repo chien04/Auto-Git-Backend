@@ -16,6 +16,9 @@ public class GitHubService {
 
     @Value("${github.organization:}")
     private String githubOrganization;
+    
+    @Value("${backend.url}")
+    private String backendUrl;
 
     private GitHub github;
 
@@ -195,26 +198,19 @@ public class GitHubService {
             
             // Check rate limit
             GHRateLimit rateLimit = gh.getRateLimit();
-            System.out.println("GitHub API Rate Limit - Remaining: " + rateLimit.getCore().getRemaining() + "/" + rateLimit.getCore().getLimit());
             
             if (rateLimit.getCore().getRemaining() < 10) {
                 throw new IOException("GitHub API rate limit exceeded. Reset at: " + rateLimit.getCore().getResetDate());
             }
             
             GHRepository repo = gh.getRepository(repoFullName);
-            System.out.println("Getting commits for repo: " + repoFullName + ", branch: " + branchName);
             
             // Check if branch exists
             GHBranch branch = null;
             try {
                 branch = repo.getBranch(branchName);
-                System.out.println("Branch found: " + branch.getName() + ", SHA: " + branch.getSHA1());
             } catch (Exception e) {
-                System.out.println("Branch '" + branchName + "' not found, listing all branches...");
-                for (GHBranch b : repo.getBranches().values()) {
-                    System.out.println("  Available branch: " + b.getName());
-                }
-                throw new IOException("Branch '" + branchName + "' not found in repository. Available branches listed above.");
+                throw new IOException("Branch '" + branchName + "' not found in repository.");
             }
             
             List<GHCommit> commitList = new ArrayList<>();
@@ -232,11 +228,7 @@ public class GitHubService {
                     count++;
                 }
                 
-                System.out.println("Successfully retrieved " + count + " commits using queryCommits");
-                
             } catch (Exception e) {
-                System.err.println("queryCommits failed, trying listCommits: " + e.getMessage());
-                
                 // Method 2: Fallback to listCommits
                 PagedIterable<GHCommit> commits = repo.listCommits();
                 
@@ -254,21 +246,11 @@ public class GitHubService {
                         // Skip this commit
                     }
                 }
-                
-                System.out.println("Retrieved " + count + " commits using listCommits fallback");
-            }
-            
-            if (commitList.isEmpty()) {
-                System.out.println("No commits found for branch: " + branchName);
-            } else {
-                System.out.println("Sample commit: " + commitList.get(0).getSHA1() + " - " + commitList.get(0).getCommitShortInfo().getMessage());
             }
             
             return commitList;
             
         } catch (IOException e) {
-            System.err.println("Error getting commits: " + e.getMessage());
-            e.printStackTrace();
             throw e;
         }
     }
@@ -287,5 +269,205 @@ public class GitHubService {
      */
     public String getToken() {
         return githubToken;
+    }
+    
+    /**
+     * Create workflow file automatically in repository
+     */
+    public void createWorkflowFile(String repoFullName, String branchName) throws IOException {
+        String workflowContent = """
+name: Auto Grading
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - teacher
+      - 'student-*'
+
+jobs:
+  test-and-grade:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Setup C/C++
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc g++ build-essential
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Detect and compile code
+        id: compile
+        continue-on-error: true
+        run: |
+          echo "Detecting code files..."
+          
+          if [ -f "Main.java" ] || [ -f "Solution.java" ]; then
+            echo "LANGUAGE=java" >> $GITHUB_OUTPUT
+            javac *.java || exit 1
+          elif [ -f "main.cpp" ] || [ -f "solution.cpp" ]; then
+            echo "LANGUAGE=cpp" >> $GITHUB_OUTPUT
+            g++ -o solution -std=c++17 -O2 *.cpp || exit 1
+          elif [ -f "main.c" ] || [ -f "solution.c" ]; then
+            echo "LANGUAGE=c" >> $GITHUB_OUTPUT
+            gcc -o solution -std=c11 -O2 *.c -lm || exit 1
+          elif [ -f "main.py" ] || [ -f "solution.py" ]; then
+            echo "LANGUAGE=python" >> $GITHUB_OUTPUT
+          elif [ -f "main.js" ] || [ -f "solution.js" ]; then
+            echo "LANGUAGE=javascript" >> $GITHUB_OUTPUT
+          else
+            echo "LANGUAGE=none" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Run test cases
+        id: test
+        if: steps.compile.outputs.LANGUAGE != 'none'
+        run: |
+          TOTAL_TESTS=0
+          PASSED_TESTS=0
+          
+          if [ ! -d "test-cases" ]; then
+            echo "No test-cases folder"
+            echo "TOTAL_TESTS=0" >> $GITHUB_OUTPUT
+            echo "PASSED_TESTS=0" >> $GITHUB_OUTPUT
+            echo "SCORE=0" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          for input in test-cases/input*.txt; do
+            [ ! -f "$input" ] && continue
+            TOTAL_TESTS=$((TOTAL_TESTS + 1))
+            num=$(basename "$input" | sed 's/input\\([0-9]*\\)\\.txt/\\1/')
+            expected="test-cases/output${num}.txt"
+            
+            echo "Test Case #$num"
+            
+            LANG="${{ steps.compile.outputs.LANGUAGE }}"
+            
+            timeout 5s bash -c "
+              if [ '$LANG' = 'java' ]; then
+                java Main < '$input' > actual.txt 2>&1
+              elif [ '$LANG' = 'cpp' ] || [ '$LANG' = 'c' ]; then
+                ./solution < '$input' > actual.txt 2>&1
+              elif [ '$LANG' = 'python' ]; then
+                python3 main.py < '$input' > actual.txt 2>&1
+              elif [ '$LANG' = 'javascript' ]; then
+                node main.js < '$input' > actual.txt 2>&1
+              fi
+            " || { echo "FAILED"; continue; }
+            
+            if diff -ZB "$expected" actual.txt > /dev/null 2>&1; then
+              echo "PASSED"
+              PASSED_TESTS=$((PASSED_TESTS + 1))
+            else
+              echo "FAILED"
+            fi
+          done
+          
+          if [ $TOTAL_TESTS -gt 0 ]; then
+            SCORE=$((PASSED_TESTS * 100 / TOTAL_TESTS))
+          else
+            SCORE=0
+          fi
+          
+          echo "TOTAL_TESTS=$TOTAL_TESTS" >> $GITHUB_OUTPUT
+          echo "PASSED_TESTS=$PASSED_TESTS" >> $GITHUB_OUTPUT
+          echo "SCORE=$SCORE" >> $GITHUB_OUTPUT
+      
+      - name: Show summary
+        if: always()
+        run: |
+          echo "## 📊 Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Score:** ${{ steps.test.outputs.SCORE }}/100" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tests Passed:** ${{ steps.test.outputs.PASSED_TESTS }}/${{ steps.test.outputs.TOTAL_TESTS }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Language:** ${{ steps.compile.outputs.LANGUAGE }}" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Send score to backend
+        if: steps.test.outputs.SCORE != ''
+        continue-on-error: true
+        run: |
+          BACKEND_URL="%s"
+          
+          SCORE="${{ steps.test.outputs.SCORE }}"
+          PASSED="${{ steps.test.outputs.PASSED_TESTS }}"
+          TOTAL="${{ steps.test.outputs.TOTAL_TESTS }}"
+          
+          echo "📤 Sending score to $BACKEND_URL..."
+          
+          curl -X POST "$BACKEND_URL/api/assignment/update-score" \\
+            -H "Content-Type: application/json" \\
+            -d "{
+              \\"repoFullName\\": \\"${{ github.repository }}\\",
+              \\"branchName\\": \\"${{ github.ref_name }}\\",
+              \\"score\\": $SCORE,
+              \\"passedTests\\": $PASSED,
+              \\"totalTests\\": $TOTAL
+            }" \\
+            && echo "✅ Score submitted successfully" \\
+            || echo "❌ Failed to submit score (backend may be offline)"
+""";
+        
+        // Inject backend URL into workflow
+        workflowContent = String.format(workflowContent, backendUrl);
+        
+        createFileInRepo(repoFullName, ".github/workflows/auto-grading.yml", workflowContent, branchName);
+    }
+    
+    /**
+     * Create sample test cases
+     */
+    public void createSampleTestCases(String repoFullName, String branchName) throws IOException {
+        // Sample test case 1
+        createFileInRepo(repoFullName, "test-cases/input1.txt", "5 10", branchName);
+        createFileInRepo(repoFullName, "test-cases/output1.txt", "15", branchName);
+        
+        // Sample test case 2
+        createFileInRepo(repoFullName, "test-cases/input2.txt", "-100 50", branchName);
+        createFileInRepo(repoFullName, "test-cases/output2.txt", "-50", branchName);
+        
+        // Sample test case 3
+        createFileInRepo(repoFullName, "test-cases/input3.txt", "0 0", branchName);
+        createFileInRepo(repoFullName, "test-cases/output3.txt", "0", branchName);
+    }
+    
+    /**
+     * Create a file in repository via GitHub API
+     * Note: GitHub API will handle base64 encoding automatically
+     */
+    private void createFileInRepo(String repoFullName, String filePath, String content, String branchName) throws IOException {
+        try {
+            GitHub gh = getGitHub();
+            GHRepository repo = gh.getRepository(repoFullName);
+            
+            // Create file - GitHub API handles encoding automatically
+            repo.createContent()
+                .branch(branchName)
+                .path(filePath)
+                .content(content)
+                .message("Add " + filePath)
+                .commit();
+        } catch (Exception e) {
+            throw e;
+        }
     }
 }

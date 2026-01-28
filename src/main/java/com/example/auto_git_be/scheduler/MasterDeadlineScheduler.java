@@ -26,7 +26,6 @@ public class MasterDeadlineScheduler {
 
     @Scheduled(cron = "0 0 0 * * ?") // Chạy lúc 00:00 hằng ngày
     public void dailyRunning() throws SchedulerException {
-        log.info("=== Daily Deadline Scheduler Running at 00:00 ===");
         deadlineReminderService.scheduleAllDeadlineReminders();
     }
 }

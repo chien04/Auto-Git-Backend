@@ -33,20 +33,8 @@ public class Student {
     @Column(name = "student_name", nullable = false)
     private String studentName;
     
-    @Column(name = "branch_name", nullable = false)
-    private String branchName;
-    
-    @Column(name = "github_token")
-    private String githubToken;
-    
-    @Column(name = "last_commit_at")
-    private LocalDateTime lastCommitAt;
-    
-    @Column(name = "commit_count")
-    private Integer commitCount = 0;
-    
-    @Column(name = "local_path")
-    private String localPath;
+    @OneToMany(mappedBy = "student", cascade = CascadeType.ALL, orphanRemoval = true)
+    private java.util.List<StudentAssignment> assignments = new java.util.ArrayList<>();
     
     @CreationTimestamp
     @Column(name = "joined_at", nullable = false, updatable = false)

@@ -34,8 +34,6 @@ public class AuthController {
     @GetMapping("/google/callback")
     public ResponseEntity<String> handleGoogleCallbackGet(@RequestParam("code") String code) {
         try {
-            System.out.println("=== Google Callback GET ===");
-            System.out.println("Authorization Code: " + code);
             
             // Return simple HTML page with authorization code
             String html = "<html><head><meta charset='UTF-8'><title>Google Login</title>" +
@@ -72,14 +70,11 @@ public class AuthController {
                 "}" +
                 "</script></body></html>";
             
-            System.out.println("HTML generated successfully, length: " + html.length());
-            
+
             return ResponseEntity.ok()
                     .contentType(MediaType.TEXT_HTML)
                     .body(html);
         } catch (Exception e) {
-            System.err.println("Error in Google callback GET: " + e.getMessage());
-            e.printStackTrace();
             return ResponseEntity.badRequest()
                     .contentType(MediaType.TEXT_HTML)
                     .body("<html><body><h1>❌ Login Failed</h1><p>" + e.getMessage() + "</p></body></html>");

@@ -15,6 +15,16 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * @deprecated This service is deprecated with the new architecture.
+ * With the new architecture, workspaces should be created per assignment, not per class.
+ * This service assumes ClassRoom has repository and Student has branchName,
+ * which is no longer true. These fields now belong to Assignment and StudentAssignment.
+ * 
+ * TODO: Create AssignmentWorkspaceService that works with Assignment repositories
+ * and StudentAssignment branches instead.
+ */
+@Deprecated
 @Service
 public class WorkspaceService {
 
@@ -23,8 +33,16 @@ public class WorkspaceService {
 
     /**
      * Setup workspace with worktrees for all students
+     * @deprecated ClassRoom no longer has repository. Use assignment-based workspace instead.
      */
+    @Deprecated
     public String setupClassroomWorkspace(ClassRoom classroom, List<Student> students) throws IOException {
+        throw new UnsupportedOperationException(
+                "setupClassroomWorkspace is no longer supported. " +
+                "With the new architecture, classes don't have repositories. " +
+                "Use AssignmentWorkspaceService (to be created) instead."
+        );
+        /*
         String classroomPath = getClassroomPath(classroom);
         File classroomDir = new File(classroomPath);
 
@@ -48,14 +66,13 @@ public class WorkspaceService {
         String workspaceFilePath = generateWorkspaceFile(classroom, students, classroomPath);
 
         return workspaceFilePath;
+        */
     }
 
     /**
      * Clone repository to local path
      */
     private void cloneRepository(String repoUrl, String targetPath) throws IOException {
-        System.out.println("Cloning repository: " + repoUrl + " to " + targetPath);
-        
         ProcessBuilder pb = new ProcessBuilder("git", "clone", repoUrl, targetPath);
         pb.redirectErrorStream(true);
         Process process = pb.start();
@@ -63,7 +80,6 @@ public class WorkspaceService {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                System.out.println(line);
             }
         }
 
@@ -107,10 +123,8 @@ public class WorkspaceService {
                     java.nio.file.StandardOpenOption.CREATE, 
                     java.nio.file.StandardOpenOption.APPEND
                 );
-                System.out.println("Added students/ to .gitignore");
             }
         } catch (Exception e) {
-            System.err.println("Failed to update .gitignore: " + e.getMessage());
         }
     }
 
@@ -123,11 +137,8 @@ public class WorkspaceService {
 
         File worktreeDir = new File(worktreePath);
         if (worktreeDir.exists()) {
-            System.out.println("Worktree already exists: " + worktreePath);
             return;
         }
-
-        System.out.println("Creating worktree for branch: " + branchName + " at " + worktreePath);
 
         // Fetch all branches first
         executeGitCommand(repoPath, "git", "fetch", "origin");
@@ -148,7 +159,6 @@ public class WorkspaceService {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                System.out.println(line);
             }
         }
 
@@ -202,19 +212,24 @@ public class WorkspaceService {
         Path workspacePath = Paths.get(workspaceFilePath);
         Files.write(workspacePath, workspaceContent.toString().getBytes());
 
-        System.out.println("Generated workspace file: " + workspaceFilePath);
         return workspaceFilePath;
     }
 
     /**
      * Get classroom workspace path
+     * @deprecated ClassRoom.getLocalPath() no longer exists
      */
+    @Deprecated
     public String getClassroomPath(ClassRoom classroom) {
+        throw new UnsupportedOperationException(
+                "getClassroomPath is no longer supported. " +
+                "ClassRoom.getLocalPath() field has been removed."
+        );
         // Use saved localPath if available, otherwise fallback to default
-        if (classroom.getLocalPath() != null && !classroom.getLocalPath().isEmpty()) {
-            return classroom.getLocalPath();
-        }
-        return workspaceRootPath + "/" + classroom.getName() + "-" + classroom.getClassCode();
+        // if (classroom.getLocalPath() != null && !classroom.getLocalPath().isEmpty()) {
+        //     return classroom.getLocalPath();
+        // }
+        // return workspaceRootPath + "/" + classroom.getName() + "-" + classroom.getClassCode();
     }
 
     /**
@@ -237,68 +252,34 @@ public class WorkspaceService {
 
     /**
      * Check if workspace exists
+     * @deprecated Use assignment-based workspace instead
      */
+    @Deprecated
     public boolean workspaceExists(ClassRoom classroom) {
-        String workspaceFilePath = getWorkspaceFilePath(classroom);
-        return new File(workspaceFilePath).exists();
+        return false; // Always return false since feature is deprecated
     }
 
     /**
      * Update workspace with new students
+     * @deprecated Use assignment-based workspace instead
      */
+    @Deprecated
     public void updateWorkspace(ClassRoom classroom, List<Student> students) throws IOException {
-        String classroomPath = getClassroomPath(classroom);
-        
-        // Create worktrees for new students
-        for (Student student : students) {
-            String sanitizedName = sanitizeFileName(student.getStudentName());
-            String worktreePath = classroomPath + "/students/" + sanitizedName;
-            
-            if (!new File(worktreePath).exists()) {
-                createWorktree(classroomPath, student.getBranchName(), student.getStudentName());
-            }
-        }
-
-        // Regenerate workspace file
-        generateWorkspaceFile(classroom, students, classroomPath);
+        throw new UnsupportedOperationException(
+                "updateWorkspace is no longer supported. " +
+                "Use assignment-based workspace instead."
+        );
     }
 
     /**
      * Sync workspace - fetch and pull latest code from all branches
+     * @deprecated Use assignment-based workspace instead
      */
+    @Deprecated
     public void syncWorkspace(ClassRoom classroom, List<Student> students) throws IOException {
-        String classroomPath = getClassroomPath(classroom);
-        File classroomDir = new File(classroomPath);
-        
-        if (!classroomDir.exists()) {
-            throw new IOException("Workspace does not exist: " + classroomPath);
-        }
-
-        System.out.println("Syncing workspace: " + classroomPath);
-
-        // Fetch all remote branches
-        executeGitCommand(classroomPath, "git", "fetch", "--all");
-
-        // Pull main/teacher branch
-        executeGitCommand(classroomPath, "git", "pull", "origin", "teacher");
-
-        // Pull each student worktree
-        for (Student student : students) {
-            String sanitizedName = sanitizeFileName(student.getStudentName());
-            String worktreePath = classroomPath + "/students/" + sanitizedName;
-            File worktreeDir = new File(worktreePath);
-            
-            if (worktreeDir.exists()) {
-                System.out.println("Pulling branch " + student.getBranchName() + " for " + student.getStudentName());
-                try {
-                    executeGitCommand(worktreePath, "git", "pull", "origin", student.getBranchName());
-                } catch (IOException e) {
-                    System.err.println("Failed to pull " + student.getBranchName() + ": " + e.getMessage());
-                    // Continue with other students
-                }
-            }
-        }
-
-        System.out.println("Workspace sync completed");
+        throw new UnsupportedOperationException(
+                "syncWorkspace is no longer supported. " +
+                "Use assignment-based workspace instead."
+        );
     }
 }

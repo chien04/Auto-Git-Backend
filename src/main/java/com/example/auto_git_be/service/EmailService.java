@@ -47,11 +47,8 @@ public class EmailService {
             
             // Send email
             sendOTPEmail(email, otp);
-            
-            log.info("OTP sent to {}", email);
 
         } catch (Exception e) {
-            log.error("Failed to send OTP to {}: {}", email, e.getMessage());
             throw new RuntimeException("Failed to send OTP email: " + e.getMessage());
         }
     }
@@ -90,9 +87,7 @@ public class EmailService {
             message.setText(body);
             
             mailSender.send(message);
-            log.info("Email sent to {}: {}", toEmail, subject);
         } catch (Exception e) {
-            log.error("Failed to send email to {}: {}", toEmail, e.getMessage());
             throw new RuntimeException("Failed to send email: " + e.getMessage());
         }
     }
@@ -104,13 +99,11 @@ public class EmailService {
         OTPData storedOTP = otpStore.get(email);
         
         if (storedOTP == null) {
-            log.warn("No OTP found for email: {}", email);
             return false;
         }
         
         // Check expiration
         if (System.currentTimeMillis() > storedOTP.expirationTime) {
-            log.warn("OTP expired for email: {}", email);
             otpStore.remove(email);
             return false;
         }
@@ -121,9 +114,6 @@ public class EmailService {
         if (valid) {
             // Remove OTP after successful verification
             otpStore.remove(email);
-            log.info("OTP verified successfully for: {}", email);
-        } else {
-            log.warn("Invalid OTP for email: {}", email);
         }
         
         return valid;

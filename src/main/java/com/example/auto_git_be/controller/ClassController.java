@@ -15,12 +15,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -41,11 +39,14 @@ public class ClassController {
     @Autowired
     private StudentService studentService;
     
+    @Autowired
+    private com.example.auto_git_be.repository.MessageRepository messageRepository;
+    
     /**
      * Create a new class (Teacher only)
      */
     @PostMapping("/create")
-    public ResponseEntity<CreateClassResponse> createClass(
+    public ResponseEntity<?> createClass(
             @RequestBody CreateClassRequest request,
             @RequestHeader("Authorization") String authHeader) {
         try {
@@ -53,14 +54,14 @@ public class ClassController {
             User teacher = authService.getUserFromToken(token);
 
             CreateClassResponse response = classRoomService.createClass(
-                request.getClassName(), 
-                request.getLocalPath(), 
-                request.getDeadline(),
+                request.getClassName(),
                 teacher
             );
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
+            Map<String, String> error = new HashMap<>();
+            error.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
         }
     }
 
@@ -78,7 +79,7 @@ public class ClassController {
             JoinClassResponse response = classRoomService.joinClass(
                     request.getStudentName(),
                     request.getClassCode(),
-                    request.getLocalPath(),
+                    null, // localPath not needed - will be set per assignment
                     student
             );
             return ResponseEntity.ok(response);
@@ -104,7 +105,8 @@ public class ClassController {
             response.put("classId", classRoom.getId());
             response.put("className", classRoom.getName());
             response.put("classCode", classRoom.getClassCode());
-            response.put("repoUrl", classRoom.getRepoUrl());
+            // With new architecture: classes don't have repositories
+            // Use assignments to get repo info
             response.put("teacherName", classRoom.getTeacher().getName());
             response.put("isActive", classRoom.getIsActive());
             
@@ -124,10 +126,6 @@ public class ClassController {
         try {
             String token = authHeader.substring(7);
             User user = authService.getUserFromToken(token);
-            
-            System.out.println("=== getStudents API called ===");
-            System.out.println("Current user ID: " + user.getId());
-            System.out.println("Current user email: " + user.getEmail());
 
             List<Student> students = classRoomService.getStudentsInClass(classCode);
             
@@ -136,21 +134,14 @@ public class ClassController {
                 studentInfo.put("studentId", student.getId());
                 studentInfo.put("userId", student.getUser().getId());
                 studentInfo.put("studentName", student.getStudentName());
-                studentInfo.put("branchName", student.getBranchName());
-                studentInfo.put("commitCount", student.getCommitCount());
-                studentInfo.put("lastCommitAt", student.getLastCommitAt());
+                // With new architecture: branch, commit info are in StudentAssignment
+                // Frontend should query assignments separately
                 studentInfo.put("joinedAt", student.getJoinedAt());
-                
-                System.out.println("Student: " + student.getStudentName() + 
-                                 ", userId: " + student.getUser().getId() + 
-                                 ", match: " + student.getUser().getId().equals(user.getId()));
                 return studentInfo;
             }).collect(Collectors.toList());
             
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            System.err.println("Error getting students: " + e.getMessage());
-            e.printStackTrace();
             return ResponseEntity.badRequest().build();
         }
     }
@@ -177,9 +168,9 @@ public class ClassController {
                 classInfo.put("classId", c.getId());
                 classInfo.put("className", c.getName());
                 classInfo.put("classCode", c.getClassCode());
-                classInfo.put("repoUrl", c.getRepoUrl());
+                // With new architecture: repos and deadlines are per assignment
                 classInfo.put("studentCount", c.getStudents().size());
-                classInfo.put("deadline", c.getDeadline());
+                classInfo.put("assignmentCount", c.getAssignments().size());
                 return classInfo;
             }).collect(Collectors.toList()));
             
@@ -188,9 +179,9 @@ public class ClassController {
                 classInfo.put("classId", s.getClassRoom().getId());
                 classInfo.put("className", s.getClassRoom().getName());
                 classInfo.put("classCode", s.getClassRoom().getClassCode());
-                classInfo.put("repoUrl", s.getClassRoom().getRepoUrl());
-                classInfo.put("branchName", s.getBranchName());
-                classInfo.put("deadline", s.getClassRoom().getDeadline());
+                // With new architecture: repos and deadlines are per assignment
+                // Student should query their assignments separately
+                classInfo.put("assignmentCount", s.getAssignments().size());
                 return classInfo;
             }).collect(Collectors.toList()));
             
@@ -268,33 +259,31 @@ public class ClassController {
 
     /**
      * Get commits for a specific branch
+     * @deprecated Use GET /api/assignment/{assignmentCode}/commits?branch= instead
      */
+    @Deprecated
     @GetMapping("/{classCode}/commits")
     public ResponseEntity<List<Map<String, Object>>> getCommits(
             @PathVariable String classCode,
             @RequestParam String branch,
             @RequestHeader("Authorization") String authHeader) {
         try {
-            System.out.println("ClassController.getCommits called with classCode: " + classCode + ", branch: " + branch);
-            
-            String token = authHeader.substring(7);
-            User user = authService.getUserFromToken(token);
-            System.out.println("Authenticated user: " + user.getEmail());
-
-            List<Map<String, Object>> commits = classRoomService.getCommits(classCode, branch);
-            System.out.println("Returning " + commits.size() + " commits to frontend");
-            return ResponseEntity.ok(commits);
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "This endpoint is deprecated. With the new architecture, " +
+                    "commits belong to assignments, not classes. " +
+                    "Use GET /api/assignment/{assignmentCode}/commits?branch= instead.");
+            error.put("deprecated", true);
+            return ResponseEntity.status(410).body(List.of(error)); // 410 Gone
         } catch (Exception e) {
-            System.err.println("Error in getCommits controller: " + e.getMessage());
-            e.printStackTrace();
             return ResponseEntity.badRequest().build();
         }
     }
 
     /**
      * Get commit URL for viewing code
-     * Format: /classCode/commit/commitSha?branch=branchName
+     * @deprecated Use GET /api/assignment/{assignmentCode}/commit/{commitSha} instead
      */
+    @Deprecated
     @GetMapping("/{classCode}/commit/{commitSha}")
     public ResponseEntity<Map<String, String>> getCommitUrl(
             @PathVariable String classCode,
@@ -302,14 +291,11 @@ public class ClassController {
             @RequestParam String branch,
             @RequestHeader("Authorization") String authHeader) {
         try {
-            String token = authHeader.substring(7);
-            authService.getUserFromToken(token); // Verify authentication
-
-            String url = classRoomService.getCommitUrl(classCode, branch, commitSha);
-            
-            Map<String, String> response = new HashMap<>();
-            response.put("url", url);
-            return ResponseEntity.ok(response);
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "This endpoint is deprecated. " +
+                    "Use GET /api/assignment/{assignmentCode}/commit/{commitSha} instead.");
+            error.put("deprecated", "true");
+            return ResponseEntity.status(410).body(error); // 410 Gone
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
         }
@@ -317,33 +303,20 @@ public class ClassController {
 
     /**
      * Setup workspace for class (Teacher only)
+     * @deprecated Use assignment-based workspace instead
      */
+    @Deprecated
     @PostMapping("/{classCode}/workspace/setup")
     public ResponseEntity<Map<String, String>> setupWorkspace(
             @PathVariable String classCode,
             @RequestHeader("Authorization") String authHeader) {
         try {
-            String token = authHeader.substring(7);
-            User teacher = authService.getUserFromToken(token);
-
-            // Verify teacher owns this class
-            ClassRoom classroom = classRoomService.getClassByCode(classCode);
-            if (!classroom.getTeacher().getId().equals(teacher.getId())) {
-                return ResponseEntity.status(403).build();
-            }
-
-            // Get all students
-            List<Student> students = classRoomService.getStudentsByClassCode(classCode);
-
-            // Setup workspace
-            String workspaceFilePath = workspaceService.setupClassroomWorkspace(classroom, students);
-
-            Map<String, String> response = new HashMap<>();
-            response.put("workspaceFilePath", workspaceFilePath);
-            response.put("message", "Workspace đã được tạo thành công");
-            return ResponseEntity.ok(response);
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "This endpoint is deprecated. With the new architecture, " +
+                    "workspaces should be created per assignment, not per class.");
+            error.put("deprecated", "true");
+            return ResponseEntity.status(410).body(error); // 410 Gone
         } catch (Exception e) {
-            e.printStackTrace();
             Map<String, String> error = new HashMap<>();
             error.put("error", e.getMessage());
             return ResponseEntity.badRequest().body(error);
@@ -352,25 +325,18 @@ public class ClassController {
 
     /**
      * Check if workspace exists for class
+     * @deprecated Use assignment-based workspace instead
      */
+    @Deprecated
     @GetMapping("/{classCode}/workspace/exists")
     public ResponseEntity<Map<String, Boolean>> checkWorkspaceExists(
             @PathVariable String classCode,
             @RequestHeader("Authorization") String authHeader) {
         try {
-            String token = authHeader.substring(7);
-            User teacher = authService.getUserFromToken(token);
-
-            ClassRoom classroom = classRoomService.getClassByCode(classCode);
-            if (!classroom.getTeacher().getId().equals(teacher.getId())) {
-                return ResponseEntity.status(403).build();
-            }
-
-            boolean exists = workspaceService.workspaceExists(classroom);
-
             Map<String, Boolean> response = new HashMap<>();
-            response.put("exists", exists);
-            return ResponseEntity.ok(response);
+            response.put("exists", false);
+            response.put("deprecated", true);
+            return ResponseEntity.status(410).body(response); // 410 Gone
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
         }
@@ -378,28 +344,19 @@ public class ClassController {
 
     /**
      * Update workspace (add new students)
+     * @deprecated Use assignment-based workspace instead
      */
+    @Deprecated
     @PostMapping("/{classCode}/workspace/update")
     public ResponseEntity<Map<String, String>> updateWorkspace(
             @PathVariable String classCode,
             @RequestHeader("Authorization") String authHeader) {
         try {
-            String token = authHeader.substring(7);
-            User teacher = authService.getUserFromToken(token);
-
-            ClassRoom classroom = classRoomService.getClassByCode(classCode);
-            if (!classroom.getTeacher().getId().equals(teacher.getId())) {
-                return ResponseEntity.status(403).build();
-            }
-
-            List<Student> students = classRoomService.getStudentsByClassCode(classCode);
-            workspaceService.updateWorkspace(classroom, students);
-
-            Map<String, String> response = new HashMap<>();
-            response.put("message", "Workspace đã được cập nhật");
-            return ResponseEntity.ok(response);
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "This endpoint is deprecated. Use assignment-based workspace instead.");
+            error.put("deprecated", "true");
+            return ResponseEntity.status(410).body(error); // 410 Gone
         } catch (Exception e) {
-            e.printStackTrace();
             Map<String, String> error = new HashMap<>();
             error.put("error", e.getMessage());
             return ResponseEntity.badRequest().body(error);
@@ -408,28 +365,19 @@ public class ClassController {
 
     /**
      * Sync workspace - fetch and pull latest code (Teacher)
+     * @deprecated Use assignment-based workspace instead
      */
+    @Deprecated
     @PostMapping("/{classCode}/workspace/sync")
     public ResponseEntity<Map<String, String>> syncWorkspace(
             @PathVariable String classCode,
             @RequestHeader("Authorization") String authHeader) {
         try {
-            String token = authHeader.substring(7);
-            User teacher = authService.getUserFromToken(token);
-
-            ClassRoom classroom = classRoomService.getClassByCode(classCode);
-            if (!classroom.getTeacher().getId().equals(teacher.getId())) {
-                return ResponseEntity.status(403).build();
-            }
-
-            List<Student> students = classRoomService.getStudentsByClassCode(classCode);
-            workspaceService.syncWorkspace(classroom, students);
-
-            Map<String, String> response = new HashMap<>();
-            response.put("message", "Đã đồng bộ code mới nhất từ GitHub");
-            return ResponseEntity.ok(response);
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "This endpoint is deprecated. Use assignment-based workspace instead.");
+            error.put("deprecated", "true");
+            return ResponseEntity.status(410).body(error); // 410 Gone
         } catch (Exception e) {
-            e.printStackTrace();
             Map<String, String> error = new HashMap<>();
             error.put("error", e.getMessage());
             return ResponseEntity.badRequest().body(error);
@@ -438,37 +386,22 @@ public class ClassController {
 
     /**
      * Update commit count for a student (called after push)
+     * @deprecated This endpoint is deprecated with the new architecture.
+     * Use POST /api/assignment/{assignmentCode}/update-commits instead.
      */
+    @Deprecated
     @PostMapping("/{classCode}/student/update-commits")
     public ResponseEntity<Map<String, Object>> updateStudentCommits(
             @PathVariable String classCode,
             @RequestHeader("Authorization") String authHeader) {
         try {
-            String token = authHeader.substring(7);
-            User user = authService.getUserFromToken(token);
-
-            System.out.println("[UPDATE COMMITS] Request from user: " + user.getEmail() + " for class: " + classCode);
-
-            ClassRoom classroom = classRoomService.getClassByCode(classCode);
-            Student student = studentService.findByUserAndClassRoom(user, classroom)
-                    .orElseThrow(() -> new RuntimeException("Student not found"));
-
-            System.out.println("[UPDATE COMMITS] Found student: " + student.getStudentName() + ", branch: " + student.getBranchName());
-
-            // Update commit count using StudentService
-            Student updatedStudent = studentService.updateCommitCount(student, classroom);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("commitCount", updatedStudent.getCommitCount());
-            response.put("lastCommitAt", updatedStudent.getLastCommitAt());
-            response.put("message", "Commit count updated successfully");
-            
-            System.out.println("[UPDATE COMMITS] Success! New count: " + updatedStudent.getCommitCount());
-            
-            return ResponseEntity.ok(response);
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "This endpoint is deprecated. With the new architecture, " +
+                    "students join assignments (not classes). " +
+                    "Use POST /api/assignment/{assignmentCode}/update-commits instead.");
+            error.put("deprecated", true);
+            return ResponseEntity.status(410).body(error); // 410 Gone
         } catch (Exception e) {
-            System.err.println("[UPDATE COMMITS] Error: " + e.getMessage());
-            e.printStackTrace();
             Map<String, Object> error = new HashMap<>();
             error.put("error", e.getMessage());
             return ResponseEntity.badRequest().body(error);
@@ -477,35 +410,20 @@ public class ClassController {
 
     /**
      * Get local path for class (Teacher)
+     * @deprecated Use assignment-based local paths instead
      */
+    @Deprecated
     @GetMapping("/{classCode}/localPath")
     public ResponseEntity<Map<String, String>> getLocalPath(
             @PathVariable String classCode,
             @RequestHeader("Authorization") String authHeader) {
         try {
-            String token = authHeader.substring(7);
-            User user = authService.getUserFromToken(token);
-
-            ClassRoom classroom = classRoomService.getClassByCode(classCode);
-            
-            Map<String, String> response = new HashMap<>();
-            
-            // Check if teacher
-            if (classroom.getTeacher().getId().equals(user.getId())) {
-                response.put("localPath", classroom.getLocalPath());
-                response.put("role", "TEACHER");
-            } else {
-                // Check if student
-                Student student = classRoomService.getStudentByUserAndClass(user, classroom);
-                if (student != null) {
-                    response.put("localPath", student.getLocalPath());
-                    response.put("role", "STUDENT");
-                } else {
-                    return ResponseEntity.status(403).build();
-                }
-            }
-            
-            return ResponseEntity.ok(response);
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "This endpoint is deprecated. With the new architecture, " +
+                    "localPath is stored per assignment, not per class. " +
+                    "Use assignment-based APIs instead.");
+            error.put("deprecated", "true");
+            return ResponseEntity.status(410).body(error); // 410 Gone
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
         }
@@ -513,28 +431,212 @@ public class ClassController {
 
     /**
      * Check if deadline has passed (Student)
+     * @deprecated Deadlines are now per assignment, not per class
      */
+    @Deprecated
     @GetMapping("/{classCode}/deadline/check")
     public ResponseEntity<Map<String, Object>> checkDeadline(
             @PathVariable String classCode,
             @RequestHeader("Authorization") String authHeader) {
         try {
-            ClassRoom classroom = classRoomService.getClassByCode(classCode);
-            Map<String, Object> response = new HashMap<>();
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "This endpoint is deprecated. With the new architecture, " +
+                    "deadlines are per assignment, not per class. " +
+                    "Use GET /api/assignment/{assignmentCode}/deadline/check instead.");
+            error.put("deprecated", true);
+            return ResponseEntity.status(410).body(error); // 410 Gone
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    /**
+     * Get all members from all classes of current user (for chat)
+     */
+    @GetMapping("/all-members")
+    public ResponseEntity<List<Map<String, Object>>> getAllClassMembers(
+            @RequestHeader("Authorization") String authHeader) {
+        try {
+            String token = authHeader.substring(7);
+            User currentUser = authService.getUserFromToken(token);
             
-            if (classroom.getDeadline() == null) {
-                response.put("hasDeadline", false);
-                response.put("canPush", true);
-                return ResponseEntity.ok(response);
+            List<ClassRoom> userClasses = new java.util.ArrayList<>();
+            
+            if ("TEACHER".equals(currentUser.getRole())) {
+                // For teacher: get all classes they teach
+                userClasses = classRoomService.getTeacherClasses(currentUser);
+            } else {
+                // For student: get classrooms from student enrollments
+                List<Student> enrollments = classRoomService.getStudentEnrollments(currentUser);
+                for (Student enrollment : enrollments) {
+                    userClasses.add(enrollment.getClassRoom());
+                }
             }
             
-            boolean isPast = java.time.LocalDateTime.now().isAfter(classroom.getDeadline());
-            response.put("hasDeadline", true);
-            response.put("deadline", classroom.getDeadline().toString());
-            response.put("canPush", !isPast);
-            response.put("message", isPast ? "Đã hết hạn nộp bài!" : "Vẫn còn thời gian nộp bài");
+            List<Map<String, Object>> allMembers = new java.util.ArrayList<>();
             
-            return ResponseEntity.ok(response);
+            for (ClassRoom classroom : userClasses) {
+                // Add teacher
+                User teacher = classroom.getTeacher();
+                if (!Objects.equals(teacher.getId(), currentUser.getId())) {
+                    Map<String, Object> teacherInfo = new HashMap<>();
+                    teacherInfo.put("userId", teacher.getId());
+                    teacherInfo.put("userName", teacher.getName());
+                    teacherInfo.put("userEmail", teacher.getEmail());
+                    teacherInfo.put("role", "TEACHER");
+                    teacherInfo.put("classId", classroom.getId());
+                    teacherInfo.put("className", classroom.getName());
+                    allMembers.add(teacherInfo);
+                }
+                
+                // Add students
+                List<Student> students = classRoomService.getStudentsInClass(classroom.getClassCode());
+                for (Student student : students) {
+                    User studentUser = student.getUser();
+                    if (!Objects.equals(studentUser.getId(), currentUser.getId())) {
+                        Map<String, Object> studentInfo = new HashMap<>();
+                        studentInfo.put("userId", studentUser.getId());
+                        studentInfo.put("userName", studentUser.getName());
+                        studentInfo.put("userEmail", studentUser.getEmail());
+                        studentInfo.put("role", "STUDENT");
+                        studentInfo.put("classId", classroom.getId());
+                        studentInfo.put("className", classroom.getName());
+                        allMembers.add(studentInfo);
+                    }
+                }
+            }
+            
+            return ResponseEntity.ok(allMembers);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+    
+    /**
+     * Get classes with last message for chat view
+     */
+    @GetMapping("/chat/classes-with-messages")
+    public ResponseEntity<List<Map<String, Object>>> getClassesWithLastMessages(
+            @RequestHeader("Authorization") String authHeader) {
+        try {
+            String token = authHeader.substring(7);
+            User currentUser = authService.getUserFromToken(token);
+            
+            List<ClassRoom> userClasses = new java.util.ArrayList<>();
+            
+            if ("TEACHER".equals(currentUser.getRole().toString())) {
+                userClasses = classRoomService.getTeacherClasses(currentUser);
+            } else {
+                List<Student> enrollments = classRoomService.getStudentEnrollments(currentUser);
+                for (Student enrollment : enrollments) {
+                    userClasses.add(enrollment.getClassRoom());
+                }
+            }
+            
+            List<Map<String, Object>> classesWithMessages = new java.util.ArrayList<>();
+            
+            for (ClassRoom classroom : userClasses) {
+                Map<String, Object> classInfo = new HashMap<>();
+                classInfo.put("id", classroom.getId());
+                classInfo.put("className", classroom.getName());
+                classInfo.put("classCode", classroom.getClassCode());
+                classInfo.put("teacherName", classroom.getTeacher().getName());
+                classInfo.put("studentCount", classroom.getStudents().size());
+                
+                // Get last message for this class
+                List<com.example.auto_git_be.entity.Message> messages = 
+                    messageRepository.findByClassRoomAndTypeOrderByCreatedAtAsc(
+                        classroom, com.example.auto_git_be.model.MessageType.CLASS_GROUP);
+                
+                if (!messages.isEmpty()) {
+                    com.example.auto_git_be.entity.Message lastMessage = messages.get(messages.size() - 1);
+                    classInfo.put("lastMessage", lastMessage.getContent());
+                    classInfo.put("lastMessageTime", lastMessage.getCreatedAt().toString());
+                    classInfo.put("lastMessageSender", lastMessage.getSender().getName());
+                } else {
+                    classInfo.put("lastMessage", "Chưa có tin nhắn");
+                    classInfo.put("lastMessageTime", null);
+                    classInfo.put("lastMessageSender", null);
+                }
+                
+                classesWithMessages.add(classInfo);
+            }
+            
+            return ResponseEntity.ok(classesWithMessages);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+    
+    /**
+     * Get members in classes for searching
+     */
+    @GetMapping("/chat/search-members")
+    public ResponseEntity<List<Map<String, Object>>> searchMembersInClasses(
+            @RequestHeader("Authorization") String authHeader,
+            @RequestParam(required = false) String query) {
+        try {
+            String token = authHeader.substring(7);
+            User currentUser = authService.getUserFromToken(token);
+            
+            List<ClassRoom> userClasses = new java.util.ArrayList<>();
+            
+            if ("TEACHER".equals(currentUser.getRole().toString())) {
+                userClasses = classRoomService.getTeacherClasses(currentUser);
+            } else {
+                List<Student> enrollments = classRoomService.getStudentEnrollments(currentUser);
+                for (Student enrollment : enrollments) {
+                    userClasses.add(enrollment.getClassRoom());
+                }
+            }
+            
+            List<Map<String, Object>> members = new java.util.ArrayList<>();
+            Set<Long> addedUserIds = new HashSet<>();
+            
+            for (ClassRoom classroom : userClasses) {
+                // Add teacher
+                User teacher = classroom.getTeacher();
+                if (!Objects.equals(teacher.getId(), currentUser.getId()) && 
+                    !addedUserIds.contains(teacher.getId())) {
+                    if (query == null || query.isEmpty() || 
+                        teacher.getName().toLowerCase().contains(query.toLowerCase()) ||
+                        teacher.getEmail().toLowerCase().contains(query.toLowerCase())) {
+                        Map<String, Object> teacherInfo = new HashMap<>();
+                        teacherInfo.put("userId", teacher.getId());
+                        teacherInfo.put("userName", teacher.getName());
+                        teacherInfo.put("userEmail", teacher.getEmail());
+                        teacherInfo.put("role", "TEACHER");
+                        teacherInfo.put("classId", classroom.getId());
+                        teacherInfo.put("className", classroom.getName());
+                        members.add(teacherInfo);
+                        addedUserIds.add(teacher.getId());
+                    }
+                }
+                
+                // Add students
+                List<Student> students = classRoomService.getStudentsInClass(classroom.getClassCode());
+                for (Student student : students) {
+                    User studentUser = student.getUser();
+                    if (!Objects.equals(studentUser.getId(), currentUser.getId()) && 
+                        !addedUserIds.contains(studentUser.getId())) {
+                        if (query == null || query.isEmpty() || 
+                            studentUser.getName().toLowerCase().contains(query.toLowerCase()) ||
+                            studentUser.getEmail().toLowerCase().contains(query.toLowerCase())) {
+                            Map<String, Object> studentInfo = new HashMap<>();
+                            studentInfo.put("userId", studentUser.getId());
+                            studentInfo.put("userName", studentUser.getName());
+                            studentInfo.put("userEmail", studentUser.getEmail());
+                            studentInfo.put("role", "STUDENT");
+                            studentInfo.put("classId", classroom.getId());
+                            studentInfo.put("className", classroom.getName());
+                            members.add(studentInfo);
+                            addedUserIds.add(studentUser.getId());
+                        }
+                    }
+                }
+            }
+            
+            return ResponseEntity.ok(members);
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
         }

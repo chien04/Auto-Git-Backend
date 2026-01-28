@@ -12,5 +12,5 @@ import lombok.NoArgsConstructor;
 public class JoinClassRequest {
     private String studentName;
     private String classCode;
-    private String localPath;
+    // localPath removed - with new architecture, localPath is per assignment
 }
