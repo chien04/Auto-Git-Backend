@@ -1,10 +1,7 @@
 package com.example.auto_git_be.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -17,10 +14,12 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "teacher_assignments", 
        uniqueConstraints = @UniqueConstraint(columnNames = {"teacher_id", "assignment_id"}))
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@ToString
 public class TeacherAssignment {
     
     @Id
@@ -28,10 +27,12 @@ public class TeacherAssignment {
     private Long id;
     
     @ManyToOne(fetch = FetchType.LAZY)
+    @ToString.Exclude
     @JoinColumn(name = "teacher_id", nullable = false)
     private User teacher; // Main teacher or sub-teacher
     
     @ManyToOne(fetch = FetchType.LAZY)
+    @ToString.Exclude
     @JoinColumn(name = "assignment_id", nullable = false)
     private Assignment assignment;
     

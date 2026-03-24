@@ -61,23 +61,14 @@ public class TeacherAssignmentService {
     public List<TeacherAssignment> getTeacherAssignments(User teacher) {
         return teacherAssignmentRepository.findByTeacher(teacher);
     }
-    
-    /**
-     * Check if teacher has access to assignment
-     */
+
     public boolean hasAccess(User teacher, Assignment assignment) {
-        // Teacher has access if:
-        // 1. They created the assignment (owner of the class)
-        // 2. They are added as sub-teacher
         if (assignment.getClassRoom().getTeacher().getId().equals(teacher.getId())) {
             return true;
         }
         return teacherAssignmentRepository.existsByTeacherAndAssignment(teacher, assignment);
     }
-    
-    /**
-     * Get local path for teacher's assignment
-     */
+
     public String getLocalPath(User teacher, Assignment assignment) {
         Optional<TeacherAssignment> ta = teacherAssignmentRepository.findByTeacherAndAssignment(teacher, assignment);
         return ta.map(TeacherAssignment::getLocalPath).orElse(null);

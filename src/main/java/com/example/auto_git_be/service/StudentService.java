@@ -86,9 +86,6 @@ public class StudentService {
         return studentRepository.existsByUserAndClassRoom(user, classRoom);
     }
 
-    /**
-     * Get all classes a student is enrolled in
-     */
     public List<Student> findByUser(User user) {
         return studentRepository.findByUser(user);
     }

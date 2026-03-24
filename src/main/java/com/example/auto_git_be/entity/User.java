@@ -1,10 +1,7 @@
 package com.example.auto_git_be.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -14,10 +11,12 @@ import java.util.List;
 
 @Entity
 @Table(name = "users")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@ToString
 public class User {
     
     @Id
@@ -41,9 +40,11 @@ public class User {
     private UserRole role;
     
     @OneToMany(mappedBy = "teacher", cascade = CascadeType.ALL)
+    @ToString.Exclude
     private List<ClassRoom> classesCreated = new ArrayList<>();
     
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
+    @ToString.Exclude
     private List<Student> enrollments = new ArrayList<>();
     
     @CreationTimestamp

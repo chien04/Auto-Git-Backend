@@ -2,11 +2,18 @@ package com.example.auto_git_be.service;
 
 import com.example.auto_git_be.dto.CreateClassResponse;
 import com.example.auto_git_be.dto.JoinClassResponse;
+import com.example.auto_git_be.entity.Assignment;
 import com.example.auto_git_be.entity.ClassRoom;
 import com.example.auto_git_be.entity.Student;
+import com.example.auto_git_be.entity.StudentAssignment;
+import com.example.auto_git_be.entity.TeacherAssignment;
 import com.example.auto_git_be.entity.User;
+import com.example.auto_git_be.repository.AssignmentRepository;
 import com.example.auto_git_be.repository.ClassRoomRepository;
+import com.example.auto_git_be.repository.StudentAssignmentRepository;
 import com.example.auto_git_be.repository.StudentRepository;
+import com.example.auto_git_be.repository.TeacherAssignmentRepository;
+import lombok.RequiredArgsConstructor;
 import org.kohsuke.github.GHRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -19,34 +26,25 @@ import java.util.Map;
 import java.util.HashMap;
 
 @Service
+@RequiredArgsConstructor
 public class ClassRoomService {
 
-    @Autowired
-    private ClassRoomRepository classRoomRepository;
-
-    @Autowired
-    private StudentRepository studentRepository;
-
-    @Autowired
-    private GitHubService gitHubService;
-
-    @Autowired
-    private WorkspaceService workspaceService;
+    private final ClassRoomRepository classRoomRepository;
+    private final StudentRepository studentRepository;
+    private final GitHubService gitHubService;
+    private final AssignmentRepository assignmentRepository;
+    private final StudentAssignmentRepository studentAssignmentRepository;
+    private final TeacherAssignmentRepository teacherAssignmentRepository;
 
     private static final String CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     private static final int CODE_LENGTH = 8;
     private static final SecureRandom random = new SecureRandom();
 
-    /**
-     * Create a new classroom with GitHub repository
-     */
     @Transactional
     public CreateClassResponse createClass(String className, User teacher) {
         try {
-            // Generate unique class code
             String classCode = generateUniqueClassCode();
             
-            // Create classroom entity (no repository - repos are per assignment now)
             ClassRoom classRoom = ClassRoom.builder()
                     .name(className)
                     .classCode(classCode)
@@ -67,19 +65,13 @@ public class ClassRoomService {
         }
     }
 
-    /**
-     * Student joins a class
-     */
     @Transactional
-    public JoinClassResponse joinClass(String studentName, String classCode, String localPath, User user) {
+    public JoinClassResponse joinClass(String studentName, String classCode, User user) {
         try {
-            // Find classroom
             ClassRoom classRoom = classRoomRepository.findByClassCode(classCode)
                     .orElseThrow(() -> new RuntimeException("Class not found with code: " + classCode));
 
-            // Check if student already enrolled
             if (studentRepository.existsByUserAndClassRoom(user, classRoom)) {
-                // Return existing enrollment
                 Student existingStudent = studentRepository.findByUserAndClassRoom(user, classRoom)
                         .orElseThrow(() -> new RuntimeException("Student enrollment error"));
                 
@@ -88,7 +80,6 @@ public class ClassRoomService {
                         .build();
             }
 
-            // Create student enrollment
             Student student = Student.builder()
                     .user(user)
                     .classRoom(classRoom)
@@ -130,9 +121,6 @@ public class ClassRoomService {
         return studentRepository.findByUser(user);
     }
 
-    /**
-     * Generate unique class code
-     */
     private String generateUniqueClassCode() {
         String code;
         do {
@@ -141,9 +129,6 @@ public class ClassRoomService {
         return code;
     }
 
-    /**
-     * Generate random alphanumeric code
-     */
     private String generateRandomCode() {
         StringBuilder code = new StringBuilder(CODE_LENGTH);
         for (int i = 0; i < CODE_LENGTH; i++) {
@@ -163,9 +148,6 @@ public class ClassRoomService {
                 .replaceAll("^-|-$", "");
     }
 
-    /**
-     * Get classroom by code
-     */
     public ClassRoom getClassByCode(String classCode) {
         return classRoomRepository.findByClassCode(classCode)
                 .orElseThrow(() -> new RuntimeException("Class not found"));
@@ -247,8 +229,7 @@ public class ClassRoomService {
     
     /**
      * Teacher deletes a class
-     * Note: With new architecture, class doesn't have repository.
-     * Assignment repositories will be cascade deleted through Assignment entities.
+     * Deletes all assignments, their repositories, student/teacher assignments, and student enrollments
      */
     @Transactional
     public void deleteClass(String classCode, User teacher) {
@@ -261,14 +242,35 @@ public class ClassRoomService {
                 throw new RuntimeException("Only the teacher who created the class can delete it");
             }
             
-            // With new architecture: repos belong to assignments, not class
-            // AssignmentService should handle deleting assignment repos
+            // 1. Delete all assignments and their GitHub repositories
+            List<Assignment> assignments = assignmentRepository.findByClassRoom(classRoom);
+            for (Assignment assignment : assignments) {
+                try {
+                    // Delete GitHub repository
+                    gitHubService.deleteRepository(assignment.getRepoName());
+                    
+                    // Delete all student assignments
+                    List<StudentAssignment> studentAssignments = studentAssignmentRepository.findByAssignment(assignment);
+                    studentAssignmentRepository.deleteAll(studentAssignments);
+                    
+                    // Delete all teacher assignments
+                    List<TeacherAssignment> teacherAssignments = teacherAssignmentRepository.findByAssignment(assignment);
+                    teacherAssignmentRepository.deleteAll(teacherAssignments);
+                    
+                    // Mark assignment as inactive
+                    assignment.setIsActive(false);
+                    assignmentRepository.save(assignment);
+                } catch (Exception e) {
+                    // Log error but continue deleting other assignments
+                    System.err.println("Failed to delete assignment " + assignment.getAssignmentCode() + ": " + e.getMessage());
+                }
+            }
             
-            // Delete all student enrollments
+            // 2. Delete all student enrollments (remove students from class)
             List<Student> students = studentRepository.findByClassRoom(classRoom);
             studentRepository.deleteAll(students);
             
-            // Mark classroom as inactive (soft delete)
+            // 3. Mark classroom as inactive (soft delete)
             classRoom.setIsActive(false);
             classRoomRepository.save(classRoom);
             

@@ -25,37 +25,27 @@ public class EmailService {
     
     @Value("${spring.mail.username}")
     private String fromEmail;
-    
-    // Store OTP temporarily (email -> OTP)
-    // In production, use Redis or database
+
+    // use redis for production
     private final Map<String, OTPData> otpStore = new ConcurrentHashMap<>();
     
     @Value("${otp.expiration.minutes:5}")
     private long otpExpirationMinutes;
-    
-    /**
-     * Generate and send OTP to user's email
-     */
+
     public void generateAndSendOTP(String email) {
         try {
-            // Generate 6-digit OTP
             String otp = String.format("%06d", new Random().nextInt(999999));
             
-            // Store OTP with expiration
             long expirationTime = System.currentTimeMillis() + (otpExpirationMinutes * 60 * 1000);
             otpStore.put(email, new OTPData(otp, expirationTime));
             
-            // Send email
             sendOTPEmail(email, otp);
 
         } catch (Exception e) {
             throw new RuntimeException("Failed to send OTP email: " + e.getMessage());
         }
     }
-    
-    /**
-     * Send OTP email using JavaMailSender
-     */
+
     private void sendOTPEmail(String toEmail, String otp) {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(fromEmail);
@@ -91,10 +81,7 @@ public class EmailService {
             throw new RuntimeException("Failed to send email: " + e.getMessage());
         }
     }
-    
-    /**
-     * Verify OTP code
-     */
+
     public boolean verifyOTP(String email, String otp) {
         OTPData storedOTP = otpStore.get(email);
         
@@ -102,17 +89,14 @@ public class EmailService {
             return false;
         }
         
-        // Check expiration
         if (System.currentTimeMillis() > storedOTP.expirationTime) {
             otpStore.remove(email);
             return false;
         }
         
-        // Verify OTP
         boolean valid = storedOTP.otp.equals(otp);
         
         if (valid) {
-            // Remove OTP after successful verification
             otpStore.remove(email);
         }
         

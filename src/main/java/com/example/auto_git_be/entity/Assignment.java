@@ -1,10 +1,7 @@
 package com.example.auto_git_be.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -14,10 +11,12 @@ import java.util.List;
 
 @Entity
 @Table(name = "assignments")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@ToString
 public class Assignment {
     
     @Id
@@ -25,6 +24,7 @@ public class Assignment {
     private Long id;
     
     @ManyToOne(fetch = FetchType.LAZY)
+    @ToString.Exclude
     @JoinColumn(name = "classroom_id", nullable = false)
     private ClassRoom classRoom;
     
@@ -47,6 +47,7 @@ public class Assignment {
     private Long githubRepoId;
     
     @OneToMany(mappedBy = "assignment", cascade = CascadeType.ALL, orphanRemoval = true)
+    @ToString.Exclude
     private List<StudentAssignment> studentAssignments = new ArrayList<>();
     
     @Column(name = "is_active")

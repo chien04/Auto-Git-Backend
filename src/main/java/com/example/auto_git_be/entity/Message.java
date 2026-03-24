@@ -2,20 +2,19 @@ package com.example.auto_git_be.entity;
 
 import com.example.auto_git_be.model.MessageType;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "messages")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@ToString
 public class Message {
     
     @Id
@@ -23,14 +22,17 @@ public class Message {
     private Long id;
     
     @ManyToOne(fetch = FetchType.LAZY)
+    @ToString.Exclude
     @JoinColumn(name = "sender_id", nullable = false)
     private User sender;
     
     @ManyToOne(fetch = FetchType.LAZY)
+    @ToString.Exclude
     @JoinColumn(name = "receiver_id")
     private User receiver;  // Null for CLASS_GROUP messages
     
     @ManyToOne(fetch = FetchType.LAZY)
+    @ToString.Exclude
     @JoinColumn(name = "classroom_id")
     private ClassRoom classRoom;  // Null for PRIVATE messages between teachers/students
     

@@ -54,68 +54,45 @@ public class AuthService {
                 .build();
     }
 
-    /**
-     * Handle Google OAuth callback with role selection
-     */
     public LoginResponse handleGoogleCallback(String code, String requestedRole) {
-        // Exchange code for access token
-        Map<String, Object> tokenResponse = exchangeCodeForToken(code);
+        Map<String, Object> tokenResponse = exchangeCodeForGoogleAccessToken(code);
         String accessToken = (String) tokenResponse.get("access_token");
 
-        // Get user info from Google
         Map<String, Object> userInfo = getUserInfoFromGoogle(accessToken);
 
-        // Extract user details
         String email = (String) userInfo.get("email");
         String name = (String) userInfo.get("name");
         String googleId = (String) userInfo.get("sub");
         String picture = (String) userInfo.get("picture");
 
-        // Try to find existing user by googleId first, then by email
         User user = userRepository.findByGoogleId(googleId).orElse(null);
         
         if (user == null) {
-            // No user with this googleId, check if email exists
             user = userRepository.findByEmail(email).orElse(null);
             
             if (user != null) {
-                // User exists with this email but no googleId - merge accounts
-                // Update user with Google info
                 user.setGoogleId(googleId);
-                user.setName(name); // Update name from Google
+                user.setName(name);
                 user.setProfilePicture(picture);
-                
-                // Check role compatibility
-                if (!user.getRole().equals(User.UserRole.BOTH)) {
-                    String existingRole = user.getRole().toString();
-                    if (!existingRole.equals(requestedRole)) {
-                        throw new RuntimeException("Tài khoản này đã đăng ký với vai trò " + 
-                            (existingRole.equals("TEACHER") ? "Giáo viên" : "Sinh viên") + 
-                            ". Không thể đăng nhập với vai trò khác.");
-                    }
-                } else {
-                    user.setRole(User.UserRole.valueOf(requestedRole));
+
+                String existingRole = user.getRole().toString();
+                if (!existingRole.equals(requestedRole)) {
+                    throw new RuntimeException("Email này đã được đăng ký với vai trò " + 
+                        (existingRole.equals("TEACHER") ? "Giáo viên" : "Sinh viên") + 
+                        ". Vui lòng sử dụng email khác để đăng ký vai trò khác.");
                 }
                 userRepository.save(user);
             }
         }
         
         if (user != null) {
-            // User exists - check role compatibility (if not already handled above)
-            if (!user.getRole().equals(User.UserRole.BOTH)) {
-                String existingRole = user.getRole().toString();
-                if (!existingRole.equals(requestedRole)) {
-                    throw new RuntimeException("Tài khoản này đã đăng ký với vai trò " + 
-                        (existingRole.equals("TEACHER") ? "Giáo viên" : "Sinh viên") + 
-                        ". Không thể đăng nhập với vai trò khác.");
-                }
-            } else {
-                // User has BOTH role - update to requested role
-                user.setRole(User.UserRole.valueOf(requestedRole));
-                userRepository.save(user);
+            String existingRole = user.getRole().toString();
+            if (!existingRole.equals(requestedRole)) {
+                throw new RuntimeException("Email này đã được đăng ký với vai trò " + 
+                    (existingRole.equals("TEACHER") ? "Giáo viên" : "Sinh viên") + 
+                    ". Vui lòng sử dụng email khác để đăng ký vai trò khác.");
             }
         } else {
-            // Create new user with requested role
             user = User.builder()
                     .email(email)
                     .name(name)
@@ -126,7 +103,6 @@ public class AuthService {
             user = userRepository.save(user);
         }
 
-        // Generate JWT token
         String jwtToken = jwtService.generateToken(user.getEmail(), user.getId());
 
         return LoginResponse.builder()
@@ -138,16 +114,12 @@ public class AuthService {
                 .build();
     }
 
-    /**
-     * Exchange authorization code for access token
-     */
-    private Map<String, Object> exchangeCodeForToken(String code) {
+    private Map<String, Object> exchangeCodeForGoogleAccessToken(String code) {
         String tokenUrl = "https://oauth2.googleapis.com/token";
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
 
-        // IMPORTANT: redirect_uri must match EXACTLY with the one used in OAuth URL
         String redirectUriForExchange = "http://localhost:3000";
 
         MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
@@ -163,11 +135,7 @@ public class AuthService {
         return response.getBody();
     }
 
-    /**
-     * Get user information from Google
-     */
     private Map<String, Object> getUserInfoFromGoogle(String accessToken) {
-        // Use OpenID Connect userinfo endpoint (v3) for better field support
         String userInfoUrl = "https://www.googleapis.com/oauth2/v3/userinfo";
 
         HttpHeaders headers = new HttpHeaders();
@@ -183,51 +151,25 @@ public class AuthService {
         return response.getBody();
     }
 
-    /**
-     * Verify JWT token
-     */
-    public boolean verifyToken(String token) {
-        try {
-            String email = jwtService.extractEmail(token);
-            return userRepository.existsByEmail(email) && !jwtService.isTokenExpired(token);
-        } catch (Exception e) {
-            return false;
-        }
-    }
-    
-    /**
-     * Login with email only (for OTP flow) with role selection
-     */
     public LoginResponse loginWithEmail(String email, String requestedRole) {
-        // Find existing user by email
         User user = userRepository.findByEmail(email).orElse(null);
         
         if (user != null) {
-            // User exists - check role compatibility
-            if (!user.getRole().equals(User.UserRole.BOTH)) {
-                // User already has a specific role
-                String existingRole = user.getRole().toString();
-                if (!existingRole.equals(requestedRole)) {
-                    throw new RuntimeException("Tài khoản này đã đăng ký với vai trò " + 
-                        (existingRole.equals("TEACHER") ? "Giáo viên" : "Sinh viên") + 
-                        ". Không thể đăng nhập với vai trò khác.");
-                }
-            } else {
-                // User has BOTH role - update to requested role
-                user.setRole(User.UserRole.valueOf(requestedRole));
-                userRepository.save(user);
+            String existingRole = user.getRole().toString();
+            if (!existingRole.equals(requestedRole)) {
+                throw new RuntimeException("Email này đã được đăng ký với vai trò " + 
+                    (existingRole.equals("TEACHER") ? "Giáo viên" : "Sinh viên") + 
+                    ". Vui lòng sử dụng email khác để đăng ký vai trò khác.");
             }
         } else {
-            // Create new user with requested role
             user = User.builder()
                     .email(email)
-                    .name(email.split("@")[0]) // Use email prefix as name
+                    .name(email.split("@")[0])
                     .role(User.UserRole.valueOf(requestedRole))
                     .build();
             user = userRepository.save(user);
         }
         
-        // Generate JWT token
         String jwtToken = jwtService.generateToken(user.getEmail(), user.getId());
         
         return LoginResponse.builder()
@@ -239,9 +181,6 @@ public class AuthService {
                 .build();
     }
 
-    /**
-     * Get user from token
-     */
     public User getUserFromToken(String token) {
         String email = jwtService.extractEmail(token);
         return userRepository.findByEmail(email)

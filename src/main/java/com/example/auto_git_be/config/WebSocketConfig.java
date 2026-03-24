@@ -1,5 +1,6 @@
 package com.example.auto_git_be.config;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.ChannelRegistration;
@@ -10,13 +11,12 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 
 @Configuration
 @EnableWebSocketMessageBroker
+@RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     
-    @Autowired
-    private WebSocketHandshakeInterceptor handshakeInterceptor;
-    
-    @Autowired
-    private WebSocketAuthChannelInterceptor authChannelInterceptor;
+    private final WebSocketHandshakeInterceptor handshakeInterceptor;
+
+    private final WebSocketAuthChannelInterceptor authChannelInterceptor;
     
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {

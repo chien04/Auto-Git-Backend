@@ -9,7 +9,6 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class GoogleAuthCodeRequest {
-    private String code;
-    private String role;
+public class FlowiseResponse {
+    private String text;
 }

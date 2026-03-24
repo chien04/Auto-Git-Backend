@@ -12,5 +12,5 @@ import lombok.NoArgsConstructor;
 public class OTPVerifyRequest {
     private String email;
     private String otp;
-    private String role; // "TEACHER" or "STUDENT"
+    private String role;
 }

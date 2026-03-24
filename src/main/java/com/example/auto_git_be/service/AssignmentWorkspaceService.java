@@ -23,9 +23,6 @@ public class AssignmentWorkspaceService {
     @Value("${workspace.root.path:D:/Assignments}")
     private String workspaceRootPath;
 
-    /**
-     * Get assignment workspace path
-     */
     private String getAssignmentPath(String classCode, String assignmentCode) {
         return workspaceRootPath + "/" + classCode + "-" + assignmentCode;
     }
@@ -37,9 +34,6 @@ public class AssignmentWorkspaceService {
         return name.replaceAll("[^a-zA-Z0-9-_]", "");
     }
 
-    /**
-     * Execute git command
-     */
     private void executeGitCommand(String workingDir, String... command) throws IOException {
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.directory(new File(workingDir));
@@ -128,9 +122,6 @@ public class AssignmentWorkspaceService {
         }
     }
 
-    /**
-     * Create git worktree for a student branch
-     */
     private void createWorktree(String repoPath, String branchName, String studentName) throws IOException {
         String sanitizedName = sanitizeFileName(studentName);
         String worktreePath = repoPath + "/students/" + sanitizedName;
@@ -140,7 +131,6 @@ public class AssignmentWorkspaceService {
             return;
         }
         
-        // Fetch the branch first
         try {
             executeGitCommand(repoPath, "git", "fetch", "origin", branchName);
         } catch (IOException e) {
@@ -150,18 +140,12 @@ public class AssignmentWorkspaceService {
         try {
             executeGitCommand(repoPath, "git", "worktree", "add", worktreePath, branchName);
         } catch (IOException e) {
-            // If branch doesn't exist remotely yet, try to create worktree anyway
             throw e;
         }
     }
 
-    /**
-     * Setup assignment workspace with worktrees for all students
-     * Uses teacher's actual localPath from database instead of default path
-     */
     public String setupAssignmentWorkspace(Assignment assignment, List<StudentAssignment> studentAssignments, String token, String localPath) throws IOException {
         if (localPath == null || localPath.isEmpty()) {
-            // Fallback to old behavior if no localPath provided
             String classCode = assignment.getClassRoom().getClassCode();
             String assignmentCode = assignment.getAssignmentCode();
             localPath = getAssignmentPath(classCode, assignmentCode);
@@ -169,7 +153,6 @@ public class AssignmentWorkspaceService {
         
         File assignmentDir = new File(localPath);
 
-        // Clone repository if not exists
         File gitDir = new File(assignmentDir, ".git");
         if (!gitDir.exists()) {
             cloneRepository(assignment.getRepoUrl(), localPath, token);
@@ -186,13 +169,8 @@ public class AssignmentWorkspaceService {
         return localPath;
     }
 
-    /**
-     * Sync assignment workspace - fetch and pull latest code from all branches
-     * Uses teacher's actual localPath from database instead of default path
-     */
     public void syncAssignmentWorkspace(Assignment assignment, List<StudentAssignment> studentAssignments, String localPath) throws IOException {
         if (localPath == null || localPath.isEmpty()) {
-            // Fallback to old behavior if no localPath provided
             String classCode = assignment.getClassRoom().getClassCode();
             String assignmentCode = assignment.getAssignmentCode();
             localPath = getAssignmentPath(classCode, assignmentCode);
@@ -204,16 +182,13 @@ public class AssignmentWorkspaceService {
             throw new IOException("Workspace does not exist: " + localPath + ". Please setup workspace first.");
         }
 
-        // Fetch all branches
         executeGitCommand(localPath, "git", "fetch", "--all");
 
-        // Pull teacher branch
         try {
             executeGitCommand(localPath, "git", "pull", "origin", "teacher");
         } catch (IOException e) {
         }
 
-        // Pull each student worktree
         for (StudentAssignment sa : studentAssignments) {
             if (sa.getBranchName() == null || sa.getBranchName().isEmpty()) {
                 continue;
@@ -239,13 +214,8 @@ public class AssignmentWorkspaceService {
         }
     }
 
-    /**
-     * Update assignment workspace when new students join
-     * Uses teacher's actual localPath from database instead of default path
-     */
-    public void updateAssignmentWorkspace(Assignment assignment, List<StudentAssignment> studentAssignments, String localPath) throws IOException {
+    public void updateAssignmentWorkspaceAndCreateWorktree(Assignment assignment, List<StudentAssignment> studentAssignments, String localPath) {
         if (localPath == null || localPath.isEmpty()) {
-            // Fallback to old behavior if no localPath provided
             String classCode = assignment.getClassRoom().getClassCode();
             String assignmentCode = assignment.getAssignmentCode();
             localPath = getAssignmentPath(classCode, assignmentCode);
@@ -265,6 +235,10 @@ public class AssignmentWorkspaceService {
                 try {
                     createWorktree(localPath, sa.getBranchName(), studentName);
                 } catch (IOException e) {
+                    throw new RuntimeException(
+                            "Create worktree failed for branch " + sa.getBranchName(),
+                            e
+                    );
                 }
             }
         }

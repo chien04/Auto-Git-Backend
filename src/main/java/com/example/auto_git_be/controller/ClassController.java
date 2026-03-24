@@ -7,44 +7,31 @@ import com.example.auto_git_be.dto.JoinClassResponse;
 import com.example.auto_git_be.entity.ClassRoom;
 import com.example.auto_git_be.entity.Student;
 import com.example.auto_git_be.entity.User;
+import com.example.auto_git_be.repository.MessageRepository;
 import com.example.auto_git_be.service.AuthService;
 import com.example.auto_git_be.service.ClassRoomService;
 import com.example.auto_git_be.service.StudentService;
 import com.example.auto_git_be.service.WorkspaceService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
 
-import jakarta.servlet.http.HttpServletRequest;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
+@RequiredArgsConstructor
 @RequestMapping("/api/class")
-@CrossOrigin(origins = "*")
 public class ClassController {
 
-    @Autowired
-    private ClassRoomService classRoomService;
+    private final ClassRoomService classRoomService;
+    private final AuthService authService;
+    private final MessageRepository messageRepository;
 
-    @Autowired
-    private AuthService authService;
-
-    @Autowired
-    private WorkspaceService workspaceService;
-    
-    @Autowired
-    private StudentService studentService;
-    
-    @Autowired
-    private com.example.auto_git_be.repository.MessageRepository messageRepository;
-    
-    /**
-     * Create a new class (Teacher only)
-     */
     @PostMapping("/create")
     public ResponseEntity<?> createClass(
             @RequestBody CreateClassRequest request,
@@ -65,9 +52,6 @@ public class ClassController {
         }
     }
 
-    /**
-     * Join a class (Student)
-     */
     @PostMapping("/join")
     public ResponseEntity<JoinClassResponse> joinClass(
             @RequestBody JoinClassRequest request,
@@ -79,7 +63,6 @@ public class ClassController {
             JoinClassResponse response = classRoomService.joinClass(
                     request.getStudentName(),
                     request.getClassCode(),
-                    null, // localPath not needed - will be set per assignment
                     student
             );
             return ResponseEntity.ok(response);
@@ -146,9 +129,6 @@ public class ClassController {
         }
     }
 
-    /**
-     * Get all classes for current user
-     */
     @GetMapping("/my-classes")
     public ResponseEntity<Map<String, Object>> getMyClasses(
             @RequestHeader("Authorization") String authHeader) {
@@ -156,10 +136,8 @@ public class ClassController {
             String token = authHeader.substring(7);
             User user = authService.getUserFromToken(token);
 
-            // Get classes as teacher
             List<ClassRoom> teacherClasses = classRoomService.getTeacherClasses(user);
             
-            // Get classes as student
             List<Student> studentEnrollments = classRoomService.getStudentEnrollments(user);
             
             Map<String, Object> response = new HashMap<>();
@@ -168,7 +146,6 @@ public class ClassController {
                 classInfo.put("classId", c.getId());
                 classInfo.put("className", c.getName());
                 classInfo.put("classCode", c.getClassCode());
-                // With new architecture: repos and deadlines are per assignment
                 classInfo.put("studentCount", c.getStudents().size());
                 classInfo.put("assignmentCount", c.getAssignments().size());
                 return classInfo;
@@ -179,8 +156,6 @@ public class ClassController {
                 classInfo.put("classId", s.getClassRoom().getId());
                 classInfo.put("className", s.getClassRoom().getName());
                 classInfo.put("classCode", s.getClassRoom().getClassCode());
-                // With new architecture: repos and deadlines are per assignment
-                // Student should query their assignments separately
                 classInfo.put("assignmentCount", s.getAssignments().size());
                 return classInfo;
             }).collect(Collectors.toList()));

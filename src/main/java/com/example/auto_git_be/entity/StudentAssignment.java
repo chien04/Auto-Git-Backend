@@ -1,10 +1,7 @@
 package com.example.auto_git_be.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -12,10 +9,12 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "student_assignments")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@ToString
 public class StudentAssignment {
     
     @Id
@@ -23,20 +22,18 @@ public class StudentAssignment {
     private Long id;
     
     @ManyToOne(fetch = FetchType.LAZY)
+    @ToString.Exclude
     @JoinColumn(name = "student_id", nullable = false)
     private Student student;
     
     @ManyToOne(fetch = FetchType.LAZY)
+    @ToString.Exclude
     @JoinColumn(name = "assignment_id", nullable = false)
     private Assignment assignment;
     
     @Column(name = "branch_name", nullable = false)
     private String branchName;
-    
-    // github_token field removed for security - always get from GitHubService (env)
-    // @Column(name = "github_token")
-    // private String githubToken;
-    
+
     @Column(name = "last_commit_at")
     private LocalDateTime lastCommitAt;
     
@@ -44,7 +41,7 @@ public class StudentAssignment {
     private Integer commitCount = 0;
     
     @Column(name = "score")
-    private Double score; // Score on scale of 10 (0-10)
+    private Double score;
     
     @Column(name = "local_path")
     private String localPath;

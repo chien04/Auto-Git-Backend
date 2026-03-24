@@ -11,24 +11,9 @@ import java.util.Optional;
 
 @Repository
 public interface TeacherAssignmentRepository extends JpaRepository<TeacherAssignment, Long> {
-    
-    /**
-     * Find teacher assignment by teacher and assignment
-     */
+
     Optional<TeacherAssignment> findByTeacherAndAssignment(User teacher, Assignment assignment);
-    
-    /**
-     * Find all assignments for a teacher
-     */
     List<TeacherAssignment> findByTeacher(User teacher);
-    
-    /**
-     * Find all teachers for an assignment
-     */
     List<TeacherAssignment> findByAssignment(Assignment assignment);
-    
-    /**
-     * Check if teacher has access to assignment
-     */
     boolean existsByTeacherAndAssignment(User teacher, Assignment assignment);
 }

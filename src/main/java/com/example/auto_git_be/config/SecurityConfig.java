@@ -1,5 +1,6 @@
 package com.example.auto_git_be.config;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,10 +19,10 @@ import java.util.List;
 
 @Configuration
 @EnableWebSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
 
-    @Autowired
-    private JwtAuthenticationFilter jwtAuthFilter;
+    private final JwtAuthenticationFilter jwtAuthFilter;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -32,7 +33,10 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/health").permitAll()
                 .requestMatchers("/api/assignment/update-score").permitAll() // GitHub Actions webhook
+                .requestMatchers("/api/test-cases/*/download-url").permitAll() // GitHub Actions get download URL
+                .requestMatchers("/api/test-cases/*/download").permitAll() // GitHub Actions proxy download test cases
                 .requestMatchers("/ws/**").permitAll()
+                    .requestMatchers("api/flowise/analyze-file").permitAll()
                 .anyRequest().authenticated()
             )
             .sessionManagement(session -> session

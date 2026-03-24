@@ -15,7 +15,7 @@ public class CreateAssignmentResponse {
     private String assignmentId;
     private String assignmentCode;
     private String title;
-    private String repoUrl;
     private String token;
+    private String repoUrl;
     private LocalDateTime deadline;
 }

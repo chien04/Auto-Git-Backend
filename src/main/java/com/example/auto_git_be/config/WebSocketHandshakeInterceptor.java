@@ -3,6 +3,7 @@ package com.example.auto_git_be.config;
 import com.example.auto_git_be.entity.User;
 import com.example.auto_git_be.repository.UserRepository;
 import com.example.auto_git_be.service.JwtService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
@@ -14,13 +15,12 @@ import org.springframework.web.socket.server.HandshakeInterceptor;
 import java.util.Map;
 
 @Component
+@RequiredArgsConstructor
 public class WebSocketHandshakeInterceptor implements HandshakeInterceptor {
 
-    @Autowired
-    private JwtService jwtService;
+    private final JwtService jwtService;
     
-    @Autowired
-    private UserRepository userRepository;
+    private final UserRepository userRepository;
 
     @Override
     public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,

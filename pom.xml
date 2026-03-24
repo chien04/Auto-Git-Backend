@@ -104,6 +104,19 @@
 			<artifactId>github-api</artifactId>
 			<version>1.321</version>
 		</dependency>
+	<!-- MinIO Client -->
+	<dependency>
+		<groupId>io.minio</groupId>
+		<artifactId>minio</artifactId>
+		<version>8.5.7</version>
+	</dependency>
+
+	<!-- Apache Commons Compress for ZIP handling -->
+	<dependency>
+		<groupId>org.apache.commons</groupId>
+		<artifactId>commons-compress</artifactId>
+		<version>1.25.0</version>
+	</dependency>
 
 		<!-- Lombok -->
 		<dependency>
