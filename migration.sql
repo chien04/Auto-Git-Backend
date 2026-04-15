@@ -59,6 +59,31 @@ CREATE INDEX idx_assignments_code ON assignments(assignment_code);
 CREATE INDEX idx_student_assignments_student ON student_assignments(student_id);
 CREATE INDEX idx_student_assignments_assignment ON student_assignments(assignment_id);
 
+-- Step 6.1: Create comments table for inline code feedback
+CREATE TABLE IF NOT EXISTS comments (
+    id BIGSERIAL PRIMARY KEY,
+    assignment_id BIGINT NOT NULL REFERENCES assignments(id),
+    student_id BIGINT NOT NULL REFERENCES students(id),
+    author_id BIGINT NOT NULL REFERENCES users(id),
+    target_branch VARCHAR(255) NOT NULL,
+    student_file_path VARCHAR(1000) NOT NULL,
+    teacher_file_path VARCHAR(1000),
+    start_line INTEGER NOT NULL,
+    start_column INTEGER NOT NULL,
+    end_line INTEGER NOT NULL,
+    end_column INTEGER NOT NULL,
+    selected_text TEXT,
+    content TEXT NOT NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'OPEN',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_comments_assignment_student_file
+    ON comments(assignment_id, student_id, student_file_path);
+CREATE INDEX IF NOT EXISTS idx_comments_assignment_branch
+    ON comments(assignment_id, target_branch);
+
 -- Step 7: Add indexes on students table
 CREATE INDEX IF NOT EXISTS idx_students_classroom ON students(classroom_id);
 CREATE INDEX IF NOT EXISTS idx_students_user ON students(user_id);

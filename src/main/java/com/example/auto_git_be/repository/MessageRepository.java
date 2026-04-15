@@ -13,25 +13,40 @@ import java.util.List;
 
 @Repository
 public interface MessageRepository extends JpaRepository<Message, Long> {
-    
-    // Find private messages between two users
-    @Query("SELECT m FROM Message m WHERE m.type = 'PRIVATE' " +
-           "AND ((m.sender.id = :userId1 AND m.receiver.id = :userId2) " +
-           "OR (m.sender.id = :userId2 AND m.receiver.id = :userId1)) " +
-           "ORDER BY m.createdAt ASC")
-    List<Message> findPrivateMessages(@Param("userId1") Long userId1, @Param("userId2") Long userId2);
-    
-    // Find all messages in a classroom group
-    List<Message> findByClassRoomAndTypeOrderByCreatedAtAsc(ClassRoom classRoom, MessageType type);
-    
-    // Count unread messages for a user
-    int countByReceiverAndIsReadFalse(User receiver);
-    
-    // Count unread private messages from a specific user
-    @Query("SELECT COUNT(m) FROM Message m WHERE m.receiver.id = :receiverId " +
-           "AND m.sender.id = :senderId AND m.isRead = false AND m.type = 'PRIVATE'")
-    int countUnreadPrivateMessages(@Param("receiverId") Long receiverId, @Param("senderId") Long senderId);
-    
-    // Find all unread messages for a user
-    List<Message> findByReceiverAndIsReadFalseOrderByCreatedAtDesc(User receiver);
+
+		List<Message> findByClassRoomAndTypeOrderByCreatedAtAsc(ClassRoom classRoom, MessageType type);
+
+		@Query("""
+				SELECT m FROM Message m
+				WHERE m.type = :type
+					AND ((m.sender.id = :userId1 AND m.receiver.id = :userId2)
+						OR (m.sender.id = :userId2 AND m.receiver.id = :userId1))
+				ORDER BY m.createdAt ASC
+		""")
+		List<Message> findPrivateMessagesBetweenUsers(
+						@Param("userId1") Long userId1,
+						@Param("userId2") Long userId2,
+						@Param("type") MessageType type
+		);
+
+		@Query("""
+				SELECT m FROM Message m
+				WHERE m.type = com.example.auto_git_be.model.MessageType.PRIVATE
+					AND (m.sender.id = :userId OR m.receiver.id = :userId)
+				ORDER BY m.createdAt DESC
+		""")
+		List<Message> findPrivateMessagesByUserIdOrderByCreatedAtDesc(@Param("userId") Long userId);
+
+		@Query("""
+				SELECT COUNT(m) FROM Message m
+				WHERE m.type = com.example.auto_git_be.model.MessageType.PRIVATE
+					AND m.sender.id = :senderId
+					AND m.receiver.id = :receiverId
+					AND m.isRead = false
+		""")
+		long countUnreadPrivateFromUserToUser(
+						@Param("senderId") Long senderId,
+						@Param("receiverId") Long receiverId
+		);
+
 }

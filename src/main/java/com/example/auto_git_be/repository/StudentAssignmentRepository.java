@@ -11,6 +11,8 @@ import java.util.Optional;
 
 @Repository
 public interface StudentAssignmentRepository extends JpaRepository<StudentAssignment, Long> {
+
+    List<StudentAssignment> findByAssignmentId(Long assignmentId);
     List<StudentAssignment> findByStudent(Student student);
     List<StudentAssignment> findByAssignment(Assignment assignment);
     Optional<StudentAssignment> findByStudentAndAssignment(Student student, Assignment assignment);

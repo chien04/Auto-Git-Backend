@@ -35,8 +35,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/assignment/update-score").permitAll() // GitHub Actions webhook
                 .requestMatchers("/api/test-cases/*/download-url").permitAll() // GitHub Actions get download URL
                 .requestMatchers("/api/test-cases/*/download").permitAll() // GitHub Actions proxy download test cases
-                .requestMatchers("/ws/**").permitAll()
-                    .requestMatchers("api/flowise/analyze-file").permitAll()
+                .requestMatchers("/ws-notifications/**").permitAll()
+                    .requestMatchers("/api/flowise/analyze-file").permitAll()
                 .anyRequest().authenticated()
             )
             .sessionManagement(session -> session

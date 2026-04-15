@@ -28,10 +28,49 @@ public class AssignmentWorkspaceService {
     }
 
     /**
-     * Sanitize file name (remove special characters)
+     * Build student folder name while preserving Unicode names (including Vietnamese).
+     * Only strip characters that are invalid for Windows paths.
      */
     private String sanitizeFileName(String name) {
+        if (name == null) {
+            return "unknown-student";
+        }
+
+        // Remove only invalid path characters for Windows/macOS compatibility
+        String sanitized = name.replaceAll("[\\\\/:*?\"<>|]", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+
+        // Windows does not allow trailing dot/space in folder names
+        sanitized = sanitized.replaceAll("[. ]+$", "").trim();
+        return sanitized.isEmpty() ? "unknown-student" : sanitized;
+    }
+
+    private String legacySanitizeFileName(String name) {
+        if (name == null) {
+            return "";
+        }
         return name.replaceAll("[^a-zA-Z0-9-_]", "");
+    }
+
+    private String getStudentWorktreePath(String repoPath, String studentName) {
+        return repoPath + "/students/" + sanitizeFileName(studentName);
+    }
+
+    private void migrateLegacyStudentFolder(String repoPath, String studentName) {
+        String newPath = getStudentWorktreePath(repoPath, studentName);
+        String legacyName = legacySanitizeFileName(studentName);
+        if (legacyName.isEmpty()) {
+            return;
+        }
+
+        String oldPath = repoPath + "/students/" + legacyName;
+        File oldDir = new File(oldPath);
+        File newDir = new File(newPath);
+
+        if (oldDir.exists() && !newDir.exists()) {
+            oldDir.renameTo(newDir);
+        }
     }
 
     private void executeGitCommand(String workingDir, String... command) throws IOException {
@@ -123,8 +162,8 @@ public class AssignmentWorkspaceService {
     }
 
     private void createWorktree(String repoPath, String branchName, String studentName) throws IOException {
-        String sanitizedName = sanitizeFileName(studentName);
-        String worktreePath = repoPath + "/students/" + sanitizedName;
+        migrateLegacyStudentFolder(repoPath, studentName);
+        String worktreePath = getStudentWorktreePath(repoPath, studentName);
 
         File worktreeDir = new File(worktreePath);
         if (worktreeDir.exists()) {
@@ -195,8 +234,8 @@ public class AssignmentWorkspaceService {
             }
 
             String studentName = sa.getStudent().getStudentName();
-            String sanitizedName = sanitizeFileName(studentName);
-            String worktreePath = localPath + "/students/" + sanitizedName;
+            migrateLegacyStudentFolder(localPath, studentName);
+            String worktreePath = getStudentWorktreePath(localPath, studentName);
             File worktreeDir = new File(worktreePath);
 
             if (!worktreeDir.exists()) {
@@ -228,8 +267,8 @@ public class AssignmentWorkspaceService {
             }
 
             String studentName = sa.getStudent().getStudentName();
-            String sanitizedName = sanitizeFileName(studentName);
-            String worktreePath = localPath + "/students/" + sanitizedName;
+            migrateLegacyStudentFolder(localPath, studentName);
+            String worktreePath = getStudentWorktreePath(localPath, studentName);
 
             if (!new File(worktreePath).exists()) {
                 try {

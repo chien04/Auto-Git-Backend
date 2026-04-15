@@ -7,24 +7,21 @@ import com.example.auto_git_be.entity.Student;
 import com.example.auto_git_be.entity.StudentAssignment;
 import com.example.auto_git_be.entity.TeacherAssignment;
 import com.example.auto_git_be.entity.User;
-import com.example.auto_git_be.service.AssignmentService;
-import com.example.auto_git_be.service.AssignmentWorkspaceService;
-import com.example.auto_git_be.service.AuthService;
-import com.example.auto_git_be.service.ClassRoomService;
-import com.example.auto_git_be.service.GitHubService;
-import com.example.auto_git_be.service.StudentAssignmentService;
-import com.example.auto_git_be.service.StudentService;
-import com.example.auto_git_be.service.TeacherAssignmentService;
+import com.example.auto_git_be.service.*;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/assignment")
 @RequiredArgsConstructor
@@ -38,6 +35,9 @@ public class AssignmentController {
     private final AssignmentWorkspaceService assignmentWorkspaceService;
     private final TeacherAssignmentService teacherAssignmentService;
     private final GitHubService gitHubService;
+    private final NotificationService notificationService;
+    private final ExcelService excelService;
+    private final CommentService commentService;
 
     @PostMapping("/create")
     public ResponseEntity<CreateAssignmentResponse> createAssignment(
@@ -198,6 +198,13 @@ public class AssignmentController {
             User user = authService.getUserFromToken(token);
             
             assignmentService.updateCommitCountForUser(assignmentCode, user);
+
+            log.info("Updated commit count for assignment {}", assignmentCode);
+            Assignment assignment = assignmentService.getAssignmentByCode(assignmentCode);
+            List<TeacherAssignment> teacherAssignment = teacherAssignmentService.getTeacherAssignment(assignment);
+            for(TeacherAssignment ta : teacherAssignment){
+                notificationService.notifyTeacherOnSubmission(ta.getTeacher().getId(), user.getId());
+            }
             return ResponseEntity.ok().build();
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
@@ -519,6 +526,81 @@ public class AssignmentController {
                 .collect(Collectors.toList());
             
             return ResponseEntity.ok(submissions);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/export-excel/{assignmentId}")
+    public void exportStudentPointExcel(HttpServletResponse response,
+                                        @PathVariable Long assignmentId
+                                        ) throws IOException {
+        excelService.exportStudentPoint(response, assignmentId);
+    }
+
+    @PostMapping("/comments")
+    public ResponseEntity<?> createComment(
+            @RequestBody CreateCommentRequest request,
+            @RequestHeader("Authorization") String authHeader) {
+        try {
+            String token = authHeader.substring(7);
+            User user = authService.getUserFromToken(token);
+            CommentResponse response = commentService.createComment(request, user);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/comments")
+    public ResponseEntity<?> getCommentsByFile(
+            @RequestParam String assignmentCode,
+            @RequestParam String targetBranch,
+            @RequestParam String studentFilePath,
+            @RequestHeader("Authorization") String authHeader) {
+        try {
+            String token = authHeader.substring(7);
+            User user = authService.getUserFromToken(token);
+            List<CommentResponse> comments = commentService.getCommentsByFile(
+                    assignmentCode,
+                    targetBranch,
+                    studentFilePath,
+                    user
+            );
+            return ResponseEntity.ok(comments);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/{assignmentCode}/student/localPath")
+    public ResponseEntity<?> getStudentLocalPath(
+            @PathVariable String assignmentCode,
+            @RequestHeader("Authorization") String authHeader) {
+        try {
+            String token = authHeader.substring(7);
+            User user = authService.getUserFromToken(token);
+            StudentAssignment studentAssignment = assignmentService.getStudentAssignmentInfo(assignmentCode, user);
+            String localPath = studentAssignment.getLocalPath();
+            return ResponseEntity.ok(Map.of(
+                    "localPath", localPath,
+                    "exists", localPath != null && !localPath.isBlank(),
+                    "branchName", studentAssignment.getBranchName()
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PatchMapping("/comments/{commentId}/resolve")
+    public ResponseEntity<?> resolveComment(
+            @PathVariable Long commentId,
+            @RequestHeader("Authorization") String authHeader) {
+        try {
+            String token = authHeader.substring(7);
+            User user = authService.getUserFromToken(token);
+            CommentResponse response = commentService.resolveComment(commentId, user);
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }

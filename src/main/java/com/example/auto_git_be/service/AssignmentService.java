@@ -33,6 +33,7 @@ public class AssignmentService {
     private final GitHubService gitHubService;
     private final AssignmentWorkspaceService assignmentWorkspaceService;
     private final TeacherAssignmentService teacherAssignmentService;
+    private final NotificationService notificationService;
     private static final String CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     private static final int CODE_LENGTH = 8;
     private static final SecureRandom random = new SecureRandom();
@@ -88,6 +89,32 @@ public class AssignmentService {
     public List<StudentAssignment> getStudentsInAssignment(Assignment assignment) {
         return studentAssignmentRepository.findByAssignment(assignment);
     }
+
+    @Transactional(readOnly = true)
+    public String getStudentLocalPath(String assignmentCode, User user) {
+        Assignment assignment = getAssignmentByCode(assignmentCode);
+
+        Student student = studentRepository.findByUserAndClassRoom(user, assignment.getClassRoom())
+                .orElseThrow(() -> new RuntimeException("You must join the class before opening assignments"));
+
+        StudentAssignment studentAssignment = studentAssignmentRepository
+                .findByStudentAndAssignment(student, assignment)
+                .orElseThrow(() -> new RuntimeException("Student assignment not found"));
+
+        return studentAssignment.getLocalPath();
+    }
+
+        @Transactional(readOnly = true)
+        public StudentAssignment getStudentAssignmentInfo(String assignmentCode, User user) {
+        Assignment assignment = getAssignmentByCode(assignmentCode);
+
+        Student student = studentRepository.findByUserAndClassRoom(user, assignment.getClassRoom())
+            .orElseThrow(() -> new RuntimeException("You must join the class before opening assignments"));
+
+        return studentAssignmentRepository
+            .findByStudentAndAssignment(student, assignment)
+            .orElseThrow(() -> new RuntimeException("Student assignment not found"));
+        }
 
     @Transactional
     public void deleteAssignment(String assignmentCode, User teacher) {
@@ -245,6 +272,8 @@ public class AssignmentService {
 
             studentAssignment.setScore(scoreOutOf10);
             studentAssignmentRepository.save(studentAssignment);
+
+            notificationService.notifyStudentOnGraded(studentAssignment.getStudent().getUser().getId(), scoreOutOf10);
             
         } catch (Exception e) {
             throw new RuntimeException("Failed to update score: " + e.getMessage(), e);
