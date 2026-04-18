@@ -44,6 +44,20 @@ public class NotificationController {
         }
     }
 
+    @DeleteMapping("/{notificationId}")
+    public ResponseEntity<Void> deleteNotification(
+            @PathVariable Long notificationId,
+            @RequestHeader("Authorization") String authHeader) {
+        try {
+            String token = authHeader.substring(7);
+            User user = authService.getUserFromToken(token);
+            notificationService.deleteNotification(user.getId(), notificationId);
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
     @PatchMapping("/read-all")
     public ResponseEntity<Void> markAllAsRead(
             @RequestHeader("Authorization") String authHeader) {

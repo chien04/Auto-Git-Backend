@@ -15,7 +15,6 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
-
     private final EmailService emailService;
 
     @GetMapping("/google/url")

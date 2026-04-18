@@ -201,12 +201,25 @@ public class AssignmentController {
 
             log.info("Updated commit count for assignment {}", assignmentCode);
             Assignment assignment = assignmentService.getAssignmentByCode(assignmentCode);
-            List<TeacherAssignment> teacherAssignment = teacherAssignmentService.getTeacherAssignment(assignment);
-            for(TeacherAssignment ta : teacherAssignment){
-                notificationService.notifyTeacherOnSubmission(ta.getTeacher().getId(), user.getId());
+            List<TeacherAssignment> teacherAssignments = teacherAssignmentService.getTeacherAssignment(assignment);
+
+            if (teacherAssignments != null && !teacherAssignments.isEmpty()) {
+                for (TeacherAssignment ta : teacherAssignments) {
+                    if (ta.getTeacher() != null && !ta.getTeacher().getId().equals(user.getId())) {
+                        notificationService.notifyTeacherOnSubmission(ta.getTeacher().getId(), user.getName(), assignment.getTitle(), assignment.getClassRoom().getName());
+                    }
+                }
+            } else if (assignment.getClassRoom() != null && assignment.getClassRoom().getTeacher() != null) {
+                Long fallbackTeacherId = assignment.getClassRoom().getTeacher().getId();
+                if (!fallbackTeacherId.equals(user.getId())) {
+                    log.warn("No teacher-assignment records found for {}. Fallback notifying class teacher {}.", assignmentCode, fallbackTeacherId);
+                    notificationService.notifyTeacherOnSubmission(fallbackTeacherId, user.getName(),assignment.getTitle(), assignment.getClassRoom().getName());
+                }
             }
+
             return ResponseEntity.ok().build();
         } catch (Exception e) {
+            log.error("Failed to update commit count / notify teachers for assignment {}: {}", assignmentCode, e.getMessage(), e);
             return ResponseEntity.badRequest().build();
         }
     }
@@ -293,6 +306,7 @@ public class AssignmentController {
     @PostMapping("/{assignmentCode}/workspace/setup")
     public ResponseEntity<Map<String, String>> setupAssignmentWorkspace(
             @PathVariable String assignmentCode,
+            @RequestBody(required = false) Map<String, String> request,
             @RequestHeader("Authorization") String authHeader) {
         try {
             String token = authHeader.substring(7);
@@ -307,8 +321,11 @@ public class AssignmentController {
                 return ResponseEntity.status(403).body(Map.of("error", "Not authorized"));
             }
             
+            String requestLocalPath = request != null ? request.get("localPath") : null;
             Optional<TeacherAssignment> teacherAssignment = teacherAssignmentService.getTeacherAssignment(teacher, assignment);
-            String localPath = teacherAssignment.map(TeacherAssignment::getLocalPath).orElse(null);
+            String localPath = (requestLocalPath != null && !requestLocalPath.trim().isEmpty())
+                    ? requestLocalPath.trim()
+                    : teacherAssignment.map(TeacherAssignment::getLocalPath).orElse(null);
             
             if (localPath == null || localPath.isEmpty()) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Local path not found. Please create assignment first."));
@@ -328,6 +345,7 @@ public class AssignmentController {
     @PostMapping("/{assignmentCode}/workspace/sync")
     public ResponseEntity<Map<String, String>> syncAssignmentWorkspace(
             @PathVariable String assignmentCode,
+            @RequestBody(required = false) Map<String, String> request,
             @RequestHeader("Authorization") String authHeader) {
         try {
             String token = authHeader.substring(7);
@@ -342,8 +360,11 @@ public class AssignmentController {
                 return ResponseEntity.status(403).body(Map.of("error", "Not authorized"));
             }
             
+            String requestLocalPath = request != null ? request.get("localPath") : null;
             Optional<TeacherAssignment> teacherAssignment = teacherAssignmentService.getTeacherAssignment(teacher, assignment);
-            String localPath = teacherAssignment.map(TeacherAssignment::getLocalPath).orElse(null);
+            String localPath = (requestLocalPath != null && !requestLocalPath.trim().isEmpty())
+                    ? requestLocalPath.trim()
+                    : teacherAssignment.map(TeacherAssignment::getLocalPath).orElse(null);
             
             if (localPath == null || localPath.isEmpty()) {
                 return ResponseEntity.badRequest().body(Map.of("error", "Local path not found. Please setup workspace first."));

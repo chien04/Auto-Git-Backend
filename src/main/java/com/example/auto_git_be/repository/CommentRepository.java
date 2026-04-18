@@ -11,6 +11,10 @@ import java.util.List;
 
 @Repository
 public interface CommentRepository extends JpaRepository<Comment, Long> {
+    void deleteByAssignment(Assignment assignment);
+    void deleteByStudent(Student student);
+    void deleteByStudentIn(List<Student> students);
+
     List<Comment> findByAssignmentAndStudentAndStudentFilePathAndStatusOrderByCreatedAtAsc(
             Assignment assignment,
             Student student,

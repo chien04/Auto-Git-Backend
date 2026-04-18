@@ -8,9 +8,11 @@ import com.example.auto_git_be.entity.StudentAssignment;
 import com.example.auto_git_be.entity.TeacherAssignment;
 import com.example.auto_git_be.entity.User;
 import com.example.auto_git_be.repository.AssignmentRepository;
+import com.example.auto_git_be.repository.CommentRepository;
 import com.example.auto_git_be.repository.StudentRepository;
 import com.example.auto_git_be.repository.StudentAssignmentRepository;
 import com.example.auto_git_be.repository.TeacherAssignmentRepository;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.kohsuke.github.GHRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +32,7 @@ public class AssignmentService {
     private final StudentRepository studentRepository;
     private final StudentAssignmentRepository studentAssignmentRepository;
     private final TeacherAssignmentRepository teacherAssignmentRepository;
+    private final CommentRepository commentRepository;
     private final GitHubService gitHubService;
     private final AssignmentWorkspaceService assignmentWorkspaceService;
     private final TeacherAssignmentService teacherAssignmentService;
@@ -125,7 +128,8 @@ public class AssignmentService {
                 throw new RuntimeException("Only the teacher who created the class can delete this assignment");
             }
 
-            gitHubService.deleteRepository(assignment.getRepoName());
+            // Hard delete all comments in this assignment so FK comments(student_id) cannot block cleanup.
+            commentRepository.deleteByAssignment(assignment);
             
             List<StudentAssignment> studentAssignments = studentAssignmentRepository.findByAssignment(assignment);
             studentAssignmentRepository.deleteAll(studentAssignments);
@@ -135,6 +139,14 @@ public class AssignmentService {
 
             assignment.setIsActive(false);
             assignmentRepository.save(assignment);
+
+            // External cleanup should not block DB cleanup.
+            try {
+                gitHubService.deleteRepository(assignment.getRepoName());
+            } catch (Exception githubError) {
+                System.err.println("Failed to delete GitHub repository for assignment "
+                        + assignment.getAssignmentCode() + ": " + githubError.getMessage());
+            }
             
         } catch (Exception e) {
             throw new RuntimeException("Failed to delete assignment: " + e.getMessage(), e);
@@ -245,7 +257,7 @@ public class AssignmentService {
             }
             
             if (studentAssignment == null) {
-                throw new RuntimeException("StudentAssignment not found for user " + user.getEmail());
+                throw new EntityNotFoundException("StudentAssignment not found for user " + user.getEmail());
             }
 
             studentAssignment.setCommitCount(studentAssignment.getCommitCount() + 1);
@@ -273,7 +285,12 @@ public class AssignmentService {
             studentAssignment.setScore(scoreOutOf10);
             studentAssignmentRepository.save(studentAssignment);
 
-            notificationService.notifyStudentOnGraded(studentAssignment.getStudent().getUser().getId(), scoreOutOf10);
+                notificationService.notifyStudentOnGraded(
+                    studentAssignment.getStudent().getUser().getId(),
+                    scoreOutOf10,
+                    assignment.getAssignmentCode(),
+                    assignment.getClassRoom().getClassCode()
+                );
             
         } catch (Exception e) {
             throw new RuntimeException("Failed to update score: " + e.getMessage(), e);

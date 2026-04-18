@@ -24,6 +24,7 @@ public class CommentService {
     private final StudentAssignmentRepository studentAssignmentRepository;
     private final AssignmentService assignmentService;
     private final TeacherAssignmentService teacherAssignmentService;
+    private final NotificationService notificationService;
 
     @Transactional
     public CommentResponse createComment(CreateCommentRequest request, User author) {
@@ -42,7 +43,11 @@ public class CommentService {
 
         Assignment assignment = assignmentService.getAssignmentByCode(request.getAssignmentCode());
 
-        if (author.getRole() == User.UserRole.TEACHER && !teacherAssignmentService.hasAccess(author, assignment)) {
+        if (author.getRole() != User.UserRole.TEACHER) {
+            throw new RuntimeException("Only teacher can create comments");
+        }
+
+        if (!teacherAssignmentService.hasAccess(author, assignment)) {
             throw new RuntimeException("Not authorized to comment on this assignment");
         }
 
@@ -67,6 +72,16 @@ public class CommentService {
                 .content(request.getComment())
                 .status(CommentStatus.OPEN)
                 .build());
+
+            notificationService.notifyStudentOnTeacherComment(
+                student.getUser().getId(),
+                author.getName(),
+                assignment.getTitle(),
+                assignment.getAssignmentCode(),
+                assignment.getClassRoom().getClassCode(),
+                request.getTargetBranch(),
+                normalizePath(request.getStudentFilePath())
+            );
 
         return toResponse(saved);
     }

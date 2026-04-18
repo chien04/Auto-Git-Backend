@@ -10,6 +10,7 @@ import com.example.auto_git_be.entity.TeacherAssignment;
 import com.example.auto_git_be.entity.User;
 import com.example.auto_git_be.repository.AssignmentRepository;
 import com.example.auto_git_be.repository.ClassRoomRepository;
+import com.example.auto_git_be.repository.CommentRepository;
 import com.example.auto_git_be.repository.StudentAssignmentRepository;
 import com.example.auto_git_be.repository.StudentRepository;
 import com.example.auto_git_be.repository.TeacherAssignmentRepository;
@@ -35,6 +36,7 @@ public class ClassRoomService {
     private final AssignmentRepository assignmentRepository;
     private final StudentAssignmentRepository studentAssignmentRepository;
     private final TeacherAssignmentRepository teacherAssignmentRepository;
+    private final CommentRepository commentRepository;
 
     private static final String CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     private static final int CODE_LENGTH = 8;
@@ -184,6 +186,9 @@ public class ClassRoomService {
             
             // With new architecture: branches belong to assignments, not class
             // StudentAssignments will be cascade deleted due to orphanRemoval in Student entity
+
+            // Remove inline comments that still reference this student.
+            commentRepository.deleteByStudent(student);
             
             // Delete student enrollment
             studentRepository.delete(student);
@@ -218,6 +223,9 @@ public class ClassRoomService {
             
             // With new architecture: branches belong to assignments, not class
             // StudentAssignments will be cascade deleted
+
+            // Remove inline comments that still reference this student.
+            commentRepository.deleteByStudent(student);
             
             // Delete student enrollment
             studentRepository.delete(student);
@@ -246,8 +254,8 @@ public class ClassRoomService {
             List<Assignment> assignments = assignmentRepository.findByClassRoom(classRoom);
             for (Assignment assignment : assignments) {
                 try {
-                    // Delete GitHub repository
-                    gitHubService.deleteRepository(assignment.getRepoName());
+                    // Delete all comments in this assignment first to prevent FK violations on students.
+                    commentRepository.deleteByAssignment(assignment);
                     
                     // Delete all student assignments
                     List<StudentAssignment> studentAssignments = studentAssignmentRepository.findByAssignment(assignment);
@@ -260,6 +268,14 @@ public class ClassRoomService {
                     // Mark assignment as inactive
                     assignment.setIsActive(false);
                     assignmentRepository.save(assignment);
+
+                    // Try deleting GitHub repository after DB cleanup so FK-safe deletion still succeeds.
+                    try {
+                        gitHubService.deleteRepository(assignment.getRepoName());
+                    } catch (Exception githubError) {
+                        System.err.println("Failed to delete GitHub repository for assignment "
+                                + assignment.getAssignmentCode() + ": " + githubError.getMessage());
+                    }
                 } catch (Exception e) {
                     // Log error but continue deleting other assignments
                     System.err.println("Failed to delete assignment " + assignment.getAssignmentCode() + ": " + e.getMessage());
@@ -268,6 +284,7 @@ public class ClassRoomService {
             
             // 2. Delete all student enrollments (remove students from class)
             List<Student> students = studentRepository.findByClassRoom(classRoom);
+            commentRepository.deleteByStudentIn(students);
             studentRepository.deleteAll(students);
             
             // 3. Mark classroom as inactive (soft delete)

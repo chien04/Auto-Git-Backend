@@ -4,6 +4,7 @@ import com.example.auto_git_be.dto.CreateClassRequest;
 import com.example.auto_git_be.dto.CreateClassResponse;
 import com.example.auto_git_be.dto.JoinClassRequest;
 import com.example.auto_git_be.dto.JoinClassResponse;
+import com.example.auto_git_be.entity.Assignment;
 import com.example.auto_git_be.entity.ClassRoom;
 import com.example.auto_git_be.entity.Student;
 import com.example.auto_git_be.entity.User;
@@ -147,7 +148,9 @@ public class ClassController {
                 classInfo.put("className", c.getName());
                 classInfo.put("classCode", c.getClassCode());
                 classInfo.put("studentCount", c.getStudents().size());
-                classInfo.put("assignmentCount", c.getAssignments().size());
+                List<Assignment> assignments = c.getAssignments();
+                List<Assignment> assignmentActives = assignments.stream().filter(Assignment::getIsActive).toList();
+                classInfo.put("assignmentCount", assignmentActives.size());
                 return classInfo;
             }).collect(Collectors.toList()));
             

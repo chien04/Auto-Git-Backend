@@ -4,6 +4,7 @@ import com.example.auto_git_be.dto.GoogleAuthUrlResponse;
 import com.example.auto_git_be.dto.LoginResponse;
 import com.example.auto_git_be.entity.User;
 import com.example.auto_git_be.repository.UserRepository;
+import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
@@ -12,6 +13,8 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 @Service
@@ -39,8 +42,8 @@ public class AuthService {
      */
     public GoogleAuthUrlResponse getGoogleAuthUrl() {
         // Use URLEncoder to properly encode redirect URI
-        String encodedRedirectUri = "http%3A%2F%2Flocalhost%3A3000";
-        
+//        String encodedRedirectUri = "http%3A%2F%2Flocalhost%3A3000";
+        String encodedRedirectUri = URLEncoder.encode("http://localhost:3000", StandardCharsets.UTF_8);
         String authUrl = "https://accounts.google.com/o/oauth2/v2/auth?" +
                 "client_id=" + googleClientId +
                 "&redirect_uri=" + encodedRedirectUri +
@@ -184,6 +187,6 @@ public class AuthService {
     public User getUserFromToken(String token) {
         String email = jwtService.extractEmail(token);
         return userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
     }
 }
