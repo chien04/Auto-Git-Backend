@@ -1,9 +1,9 @@
 package com.example.auto_git_be.controller;
 
-import com.example.auto_git_be.dto.CreateClassRequest;
-import com.example.auto_git_be.dto.CreateClassResponse;
-import com.example.auto_git_be.dto.JoinClassRequest;
-import com.example.auto_git_be.dto.JoinClassResponse;
+import com.example.auto_git_be.dto.classroom.CreateClassRequest;
+import com.example.auto_git_be.dto.classroom.CreateClassResponse;
+import com.example.auto_git_be.dto.classroom.JoinClassRequest;
+import com.example.auto_git_be.dto.classroom.JoinClassResponse;
 import com.example.auto_git_be.entity.Assignment;
 import com.example.auto_git_be.entity.ClassRoom;
 import com.example.auto_git_be.entity.Student;
@@ -620,3 +620,4 @@ public class ClassController {
         }
     }
 }
+

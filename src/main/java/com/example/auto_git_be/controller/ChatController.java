@@ -1,8 +1,9 @@
 package com.example.auto_git_be.controller;
 
-import com.example.auto_git_be.dto.ChatMessageDTO;
-import com.example.auto_git_be.dto.SendMessageRequest;
+import com.example.auto_git_be.dto.chat.ChatMessageDTO;
+import com.example.auto_git_be.dto.chat.SendMessageRequest;
 import com.example.auto_git_be.model.MessageType;
+import com.example.auto_git_be.service.AiService;
 import com.example.auto_git_be.service.MessageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 public class ChatController {
 
 	private final MessageService messageService;
+	private final AiService aiService;
 	private final SimpMessagingTemplate messagingTemplate;
 
 	/**
@@ -97,4 +99,5 @@ public class ChatController {
 		return Long.parseLong(headerAccessor.getUser().getName());
 	}
 }
+
 

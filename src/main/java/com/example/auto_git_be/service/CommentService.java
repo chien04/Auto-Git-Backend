@@ -1,7 +1,7 @@
 package com.example.auto_git_be.service;
 
-import com.example.auto_git_be.dto.CommentResponse;
-import com.example.auto_git_be.dto.CreateCommentRequest;
+import com.example.auto_git_be.dto.comment.CommentResponse;
+import com.example.auto_git_be.dto.comment.CreateCommentRequest;
 import com.example.auto_git_be.entity.Assignment;
 import com.example.auto_git_be.entity.Comment;
 import com.example.auto_git_be.entity.Student;
@@ -183,3 +183,4 @@ public class CommentService {
                 .build();
     }
 }
+

@@ -1,6 +1,11 @@
 package com.example.auto_git_be.controller;
 
-import com.example.auto_git_be.dto.*;
+import com.example.auto_git_be.dto.auth.GoogleAuthCodeRequest;
+import com.example.auto_git_be.dto.auth.GoogleAuthUrlResponse;
+import com.example.auto_git_be.dto.auth.LoginResponse;
+import com.example.auto_git_be.dto.auth.OTPLoginRequest;
+import com.example.auto_git_be.dto.auth.OTPResponse;
+import com.example.auto_git_be.dto.auth.OTPVerifyRequest;
 import com.example.auto_git_be.service.AuthService;
 import com.example.auto_git_be.service.EmailService;
 import lombok.RequiredArgsConstructor;

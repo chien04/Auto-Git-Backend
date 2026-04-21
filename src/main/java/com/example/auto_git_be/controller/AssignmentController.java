@@ -1,6 +1,13 @@
 package com.example.auto_git_be.controller;
 
-import com.example.auto_git_be.dto.*;
+import com.example.auto_git_be.dto.assignment.CreateAssignmentRequest;
+import com.example.auto_git_be.dto.assignment.CreateAssignmentResponse;
+import com.example.auto_git_be.dto.assignment.JoinAssignmentRequest;
+import com.example.auto_git_be.dto.assignment.JoinAssignmentResponse;
+import com.example.auto_git_be.dto.assignment.ScoreUpdateRequest;
+import com.example.auto_git_be.dto.assignment.StudentSubmissionDTO;
+import com.example.auto_git_be.dto.comment.CommentResponse;
+import com.example.auto_git_be.dto.comment.CreateCommentRequest;
 import com.example.auto_git_be.entity.Assignment;
 import com.example.auto_git_be.entity.ClassRoom;
 import com.example.auto_git_be.entity.Student;

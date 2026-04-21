@@ -4,6 +4,7 @@ import com.example.auto_git_be.entity.ClassRoom;
 import com.example.auto_git_be.entity.Message;
 import com.example.auto_git_be.entity.User;
 import com.example.auto_git_be.model.MessageType;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -18,7 +19,7 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
 
 		@Query("""
 				SELECT m FROM Message m
-				WHERE m.type = :type
+				WHERE m.type in :types
 					AND ((m.sender.id = :userId1 AND m.receiver.id = :userId2)
 						OR (m.sender.id = :userId2 AND m.receiver.id = :userId1))
 				ORDER BY m.createdAt ASC
@@ -26,9 +27,22 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
 		List<Message> findPrivateMessagesBetweenUsers(
 						@Param("userId1") Long userId1,
 						@Param("userId2") Long userId2,
-						@Param("type") MessageType type
+						@Param("types") List<MessageType> types
 		);
 
+		@Query("""
+				SELECT m FROM Message m
+				WHERE m.type in :types
+					AND ((m.sender.id = :userId1 AND m.receiver.id = :userId2)
+						OR (m.sender.id = :userId2 AND m.receiver.id = :userId1))
+				ORDER BY m.createdAt DESC
+		""")
+		List<Message> findRecentMessageBetweenUsers(
+				@Param("userId1") Long userId1,
+				@Param("userId2") Long userId2,
+				@Param(("types"))  List<MessageType> types,
+				Pageable pageable
+		);
 		@Query("""
 				SELECT m FROM Message m
 				WHERE m.type = com.example.auto_git_be.model.MessageType.PRIVATE

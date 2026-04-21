@@ -1,6 +1,6 @@
 package com.example.auto_git_be.controller;
 
-import com.example.auto_git_be.dto.ChatMessageDTO;
+import com.example.auto_git_be.dto.chat.ChatMessageDTO;
 import com.example.auto_git_be.entity.User;
 import com.example.auto_git_be.service.MessageService;
 import com.example.auto_git_be.service.AuthService;
@@ -23,13 +23,9 @@ public class MessageController {
 	public ResponseEntity<List<ChatMessageDTO>> getPrivateMessages(
 			@PathVariable Long otherUserId,
 			@RequestHeader("Authorization") String authHeader) {
-		try {
 			String token = authHeader.substring(7);
 			User currentUser = authService.getUserFromToken(token);
 			return ResponseEntity.ok(messageService.getPrivateMessages(currentUser.getId(), otherUserId));
-		} catch (Exception e) {
-			return ResponseEntity.badRequest().build();
-		}
 	}
 
 	@GetMapping("/class/{classroomId}")
@@ -71,3 +67,4 @@ public class MessageController {
 		}
 	}
 }
+

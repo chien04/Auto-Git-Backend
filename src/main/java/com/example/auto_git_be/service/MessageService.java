@@ -1,6 +1,6 @@
 package com.example.auto_git_be.service;
 
-import com.example.auto_git_be.dto.ChatMessageDTO;
+import com.example.auto_git_be.dto.chat.ChatMessageDTO;
 import com.example.auto_git_be.entity.ClassRoom;
 import com.example.auto_git_be.entity.Message;
 import com.example.auto_git_be.entity.User;
@@ -37,7 +37,7 @@ public class MessageService {
 		User receiver = null;
 		ClassRoom classRoom = null;
 
-		if (type == MessageType.PRIVATE) {
+		if (type == MessageType.PRIVATE || type == MessageType.AI_CHAT) {
 			if (receiverId == null) {
 				throw new RuntimeException("receiverId is required for private message");
 			}
@@ -69,7 +69,7 @@ public class MessageService {
 		List<Message> messages = messageRepository.findPrivateMessagesBetweenUsers(
 				currentUserId,
 				otherUserId,
-				MessageType.PRIVATE
+				List.of(MessageType.PRIVATE, MessageType.AI_CHAT)
 		);
 		return messages.stream().map(this::toDTO).toList();
 	}
@@ -140,3 +140,4 @@ public class MessageService {
 				.build();
 	}
 }
+

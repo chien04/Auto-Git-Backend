@@ -1,6 +1,6 @@
 package com.example.auto_git_be.service;
 
-import com.example.auto_git_be.dto.JoinAssignmentResponse;
+import com.example.auto_git_be.dto.assignment.JoinAssignmentResponse;
 import com.example.auto_git_be.entity.Assignment;
 import com.example.auto_git_be.entity.ClassRoom;
 import com.example.auto_git_be.entity.Student;
@@ -320,3 +320,4 @@ public class AssignmentService {
                 .replaceAll("^-|-$", "");
     }
 }
+

@@ -1,7 +1,7 @@
 package com.example.auto_git_be.service;
 
-import com.example.auto_git_be.dto.GoogleAuthUrlResponse;
-import com.example.auto_git_be.dto.LoginResponse;
+import com.example.auto_git_be.dto.auth.GoogleAuthUrlResponse;
+import com.example.auto_git_be.dto.auth.LoginResponse;
 import com.example.auto_git_be.entity.User;
 import com.example.auto_git_be.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -190,3 +190,4 @@ public class AuthService {
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
     }
 }
+

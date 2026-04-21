@@ -1,9 +1,9 @@
 package com.example.auto_git_be.controller;
 
-import com.example.auto_git_be.dto.ClassStatisticsResponse;
-import com.example.auto_git_be.dto.CommitActivityResponse;
-import com.example.auto_git_be.dto.StudentDashboardResponse;
-import com.example.auto_git_be.dto.TeacherDashboardResponse;
+import com.example.auto_git_be.dto.dashboard.ClassStatisticsResponse;
+import com.example.auto_git_be.dto.dashboard.CommitActivityResponse;
+import com.example.auto_git_be.dto.dashboard.StudentDashboardResponse;
+import com.example.auto_git_be.dto.dashboard.TeacherDashboardResponse;
 import com.example.auto_git_be.entity.ClassRoom;
 import com.example.auto_git_be.entity.Student;
 import com.example.auto_git_be.entity.StudentAssignment;
@@ -245,3 +245,4 @@ public class DashboardController {
         }
     }
 }
+

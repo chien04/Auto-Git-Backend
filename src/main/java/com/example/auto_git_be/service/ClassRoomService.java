@@ -1,7 +1,7 @@
 package com.example.auto_git_be.service;
 
-import com.example.auto_git_be.dto.CreateClassResponse;
-import com.example.auto_git_be.dto.JoinClassResponse;
+import com.example.auto_git_be.dto.classroom.CreateClassResponse;
+import com.example.auto_git_be.dto.classroom.JoinClassResponse;
 import com.example.auto_git_be.entity.Assignment;
 import com.example.auto_git_be.entity.ClassRoom;
 import com.example.auto_git_be.entity.Student;
@@ -354,3 +354,4 @@ public class ClassRoomService {
         return classRoomRepository.findByTeacher(teacher);
     }
 }
+
