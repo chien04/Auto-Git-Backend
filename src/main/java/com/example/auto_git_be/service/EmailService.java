@@ -12,9 +12,6 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Email service for sending OTP codes via real email
- */
 @Service
 public class EmailService {
     
@@ -26,7 +23,6 @@ public class EmailService {
     @Value("${spring.mail.username}")
     private String fromEmail;
 
-    // use redis for production
     private final Map<String, OTPData> otpStore = new ConcurrentHashMap<>();
     
     @Value("${otp.expiration.minutes:5}")
@@ -102,10 +98,7 @@ public class EmailService {
         
         return valid;
     }
-    
-    /**
-     * Clear expired OTPs (call this periodically)
-     */
+
     public void clearExpiredOTPs() {
         long now = System.currentTimeMillis();
         otpStore.entrySet().removeIf(entry -> now > entry.getValue().expirationTime);

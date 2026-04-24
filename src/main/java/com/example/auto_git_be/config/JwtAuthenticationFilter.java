@@ -60,7 +60,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
         } catch (Exception e) {
             System.err.println(">>> Lỗi tại extractEmail: " + e.getMessage());
-            e.printStackTrace(); // Dòng này cực kỳ quan trọng để debug
         }
 
         filterChain.doFilter(request, response);

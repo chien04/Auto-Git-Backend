@@ -10,54 +10,52 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "student_assignments")
+@Table(
+        name = "assignment_tasks",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_assignment_tasks_assignment_task_name", columnNames = {"assignment_id", "task_name"})
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@ToString
-public class StudentAssignment {
-    
+public class AssignmentTask {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    
+
     @ManyToOne(fetch = FetchType.LAZY)
-    @ToString.Exclude
-    @JoinColumn(name = "student_id", nullable = false)
-    private Student student;
-    
-    @ManyToOne(fetch = FetchType.LAZY)
-    @ToString.Exclude
     @JoinColumn(name = "assignment_id", nullable = false)
     private Assignment assignment;
-    
-    @Column(name = "branch_name", nullable = false)
-    private String branchName;
 
-    @Column(name = "last_commit_at")
-    private LocalDateTime lastCommitAt;
-    
-    @Column(name = "commit_count")
-    private Integer commitCount = 0;
-    
-    @Column(name = "score")
-    private Double score;
-    
-    @Column(name = "local_path")
-    private String localPath;
-    
+    @Column(name = "task_name", nullable = false, length = 255)
+    private String taskName;
+
+    @Column(name = "description", columnDefinition = "TEXT")
+    private String description;
+
+    @Column(name = "order_no")
+    private Integer orderNo;
+
+    @Column(name = "bucket", length = 255)
+    private String bucket;
+
+    @Column(name = "object_key", length = 500)
+    private String objectKey;
+
     @CreationTimestamp
-    @Column(name = "joined_at", nullable = false, updatable = false)
-    private LocalDateTime joinedAt;
-    
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
     @OneToMany(
-            mappedBy = "studentAssignment",
+            mappedBy = "assignmentTask",
             cascade = CascadeType.ALL,
             orphanRemoval = true
     )

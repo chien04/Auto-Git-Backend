@@ -32,9 +32,9 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/health").permitAll()
-                .requestMatchers("/api/assignment/update-score").permitAll() // GitHub Actions webhook
-                .requestMatchers("/api/test-cases/*/download-url").permitAll() // GitHub Actions get download URL
-                .requestMatchers("/api/test-cases/*/download").permitAll() // GitHub Actions proxy download test cases
+                .requestMatchers("/api/assignment/update-score").permitAll()
+                .requestMatchers("/api/test-cases/*/download-urls").permitAll()
+                .requestMatchers("/api/test-cases/*/task/*/download").permitAll()
                 .requestMatchers("/ws-notifications/**").permitAll()
                     .requestMatchers("/api/flowise/analyze-file").permitAll()
                 .anyRequest().authenticated()
@@ -50,7 +50,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(List.of("*")); // Use patterns instead of origins for wildcard
+        configuration.setAllowedOriginPatterns(List.of("*"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true); // Enable credentials

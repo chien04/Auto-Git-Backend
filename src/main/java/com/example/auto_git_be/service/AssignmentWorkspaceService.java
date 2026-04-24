@@ -13,10 +13,6 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Service for managing assignment workspaces with git worktrees
- * Supports multi-student workspace where teacher can view all students' code
- */
 @Service
 public class AssignmentWorkspaceService {
 
@@ -27,10 +23,6 @@ public class AssignmentWorkspaceService {
         return workspaceRootPath + "/" + classCode + "-" + assignmentCode;
     }
 
-    /**
-     * Build student folder name while preserving Unicode names (including Vietnamese).
-     * Only strip characters that are invalid for Windows paths.
-     */
     private String sanitizeFileName(String name) {
         if (name == null) {
             return "unknown-student";
@@ -99,9 +91,6 @@ public class AssignmentWorkspaceService {
         }
     }
 
-    /**
-     * Clone repository with authentication
-     */
     private void cloneRepository(String repoUrl, String targetPath, String token) throws IOException {
         File targetDir = new File(targetPath);
         if (targetDir.exists()) {
@@ -127,9 +116,6 @@ public class AssignmentWorkspaceService {
         executeGitCommand(targetPath, "git", "checkout", "teacher");
     }
 
-    /**
-     * Add students folder to .gitignore and auto-commit if modified
-     */
     private void addStudentsFolderToGitignore(String repoPath) throws IOException {
         File gitignoreFile = new File(repoPath, ".gitignore");
         String studentsEntry = "students/\n";
@@ -283,29 +269,16 @@ public class AssignmentWorkspaceService {
         }
     }
 
-    /**
-     * Check if workspace exists
-     */
     public boolean workspaceExists(String classCode, String assignmentCode) {
         String assignmentPath = getAssignmentPath(classCode, assignmentCode);
         File gitDir = new File(assignmentPath, ".git");
         return gitDir.exists();
     }
 
-    /**
-     * Get workspace path
-     */
     public String getWorkspacePath(String classCode, String assignmentCode) {
         return getAssignmentPath(classCode, assignmentCode);
     }
-    
-    /**
-     * Check if workspace is set up with worktree structure
-     * A workspace is considered "set up" if:
-     * 1. Main folder exists
-     * 2. It's a git repository (.git exists)
-     * 3. students/ folder exists (worktree structure)
-     */
+
     public boolean isWorkspaceSetup(String localPath) {
         if (localPath == null || localPath.isEmpty()) {
             return false;
@@ -333,10 +306,4 @@ public class AssignmentWorkspaceService {
         return true;
     }
     
-    /**
-     * Check if workspace is set up for an assignment
-     */
-    public boolean isWorkspaceSetup(Assignment assignment, String localPath) {
-        return isWorkspaceSetup(localPath);
-    }
 }

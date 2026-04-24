@@ -20,7 +20,7 @@ public class GlobalExceptionHandle {
 
         ErrorResponse error = new ErrorResponse(
                 HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                "Hệ thống xảy ra lỗi, vui lòng thử lại sau: " + e.getMessage(),
+                "Hệ thống xảy ra lỗi, vui lòng thử lại sau",
                 LocalDateTime.now()
         );
 

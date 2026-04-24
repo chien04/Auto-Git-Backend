@@ -1,7 +1,10 @@
 package com.example.auto_git_be.service;
 
-import com.example.auto_git_be.entity.TestCase;
-import com.example.auto_git_be.repository.TestCaseRepository;
+import com.example.auto_git_be.dto.testcase.TaskZipItem;
+import com.example.auto_git_be.entity.Assignment;
+import com.example.auto_git_be.entity.AssignmentTask;
+import com.example.auto_git_be.repository.AssignmentRepository;
+import com.example.auto_git_be.repository.AssignmentTaskRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
@@ -10,164 +13,208 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Base64;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class TestCaseService {
 
-    private final TestCaseRepository testCaseRepository;
+    private final AssignmentRepository assignmentRepository;
+    private final AssignmentTaskRepository assignmentTaskRepository;
     private final MinioService minioService;
 
     @Transactional
-    public Map<String, Object> uploadTestCasesZip(String assignmentCode, byte[] zipBytes) {
-        try {
-            Map<String, Map<String, Set<String>>> structure = new HashMap<>();
+    public Map<String, Object> uploadTaskTestCasesZips(String assignmentCode, List<TaskZipItem> tasks) {
+        Assignment assignment = assignmentRepository.findByAssignmentCode(assignmentCode)
+                .orElseThrow(() -> new RuntimeException("Assignment not found: " + assignmentCode));
 
-            try (ZipArchiveInputStream zipIn = new ZipArchiveInputStream(new ByteArrayInputStream(zipBytes))) {
-                ZipArchiveEntry entry;
-                while ((entry = zipIn.getNextZipEntry()) != null) {
-                    String path = entry.getName();
-                    if (entry.isDirectory()) continue;
-
-                    String[] parts = path.split("/");
-                    if (parts.length == 3 && "testcases".equals(parts[0])) {
-                        String exerciseName = parts[1];
-                        String fileName = parts[2];
-
-                        if (fileName.endsWith(".txt")) {
-                            String type = fileName.startsWith("input") ? "input" : (fileName.startsWith("output") ? "output" : null);
-                            if (type != null) {
-                                String numStr = fileName.replaceAll("[^0-9]", "");
-                                structure.computeIfAbsent(exerciseName, k -> new HashMap<>())
-                                        .computeIfAbsent(numStr, k -> new HashSet<>())
-                                        .add(type);
-                            }
-                        }
-                    }
-                }
-            }
-
-            List<TestCase> testCasesToSave = new ArrayList<>();
-            String zipObjectKey = "test-cases/" + assignmentCode + ".zip";
-            Map<String, Integer> finalCounts = new HashMap<>();
-
-            for (var exerciseEntry : structure.entrySet()) {
-                String exName = exerciseEntry.getKey();
-                int validCount = 0;
-
-                for (var testEntry : exerciseEntry.getValue().entrySet()) {
-                    Set<String> types = testEntry.getValue();
-                    if (types.contains("input") && types.contains("output")) {
-                        int testNum = Integer.parseInt(testEntry.getKey());
-                        testCasesToSave.add(TestCase.builder()
-                                .assignmentCode(assignmentCode)
-                                .exerciseName(exName)
-                                .testNumber(testNum)
-                                .zipObjectKey(zipObjectKey)
-                                .fileSize((long) zipBytes.length)
-                                .timeLimitMs(5000)
-                                .memoryLimitMb(256)
-                                .build());
-                        validCount++;
-                    } else {
-                        log.warn("Test case {} in {} missing input or output", testEntry.getKey(), exName);
-                    }
-                }
-                finalCounts.put(exName, validCount);
-            }
-
-            if (testCasesToSave.isEmpty()) {
-                throw new RuntimeException("No valid test cases found (must have both input#.txt and output#.txt)");
-            }
-
-            minioService.uploadFile(zipObjectKey, zipBytes, "application/zip");
-            testCaseRepository.deleteByAssignmentCode(assignmentCode);
-            testCaseRepository.saveAll(testCasesToSave);
-
-            return Map.of(
-                    "message", "Test cases uploaded successfully",
-                    "assignmentCode", assignmentCode,
-                    "exercises", finalCounts,
-                    "totalValidTestCases", testCasesToSave.size()
-            );
-
-        } catch (Exception e) {
-            log.error("Upload failed", e);
-            throw new RuntimeException("Failed to process ZIP: " + e.getMessage());
+        if (tasks == null || tasks.isEmpty()) {
+            throw new RuntimeException("Tasks list is empty");
         }
+
+        List<Map<String, Object>> uploaded = new ArrayList<>();
+
+        for (int index = 0; index < tasks.size(); index++) {
+            TaskZipItem item = tasks.get(index);
+            if (item == null || item.getFileContent() == null || item.getFileContent().isBlank()) {
+                continue;
+            }
+
+            int taskOrderNo = index + 1;
+            byte[] zipBytes = Base64.getDecoder().decode(item.getFileContent());
+            validateTaskZipStructure(zipBytes, taskOrderNo, item.getFileName());
+
+            String taskName = (item.getTaskName() == null || item.getTaskName().isBlank())
+                ? ("Task " + taskOrderNo)
+                    : item.getTaskName();
+
+            String objectKey = buildTaskObjectKey(assignmentCode, taskName, taskOrderNo);
+            minioService.uploadFile(objectKey, zipBytes, "application/zip");
+
+            AssignmentTask assignmentTask = assignmentTaskRepository
+                    .findByAssignmentAndTaskName(assignment, taskName)
+                    .orElseGet(() -> AssignmentTask.builder()
+                            .assignment(assignment)
+                            .taskName(taskName)
+                    .orderNo(taskOrderNo)
+                            .build());
+
+            assignmentTask.setBucket(minioService.getBucketName());
+            assignmentTask.setObjectKey(objectKey);
+            if (assignmentTask.getOrderNo() == null) {
+                assignmentTask.setOrderNo(taskOrderNo);
+            }
+            assignmentTaskRepository.save(assignmentTask);
+
+            Map<String, Object> itemResult = new HashMap<>();
+            itemResult.put("taskName", taskName);
+            itemResult.put("objectKey", objectKey);
+            itemResult.put("size", zipBytes.length);
+            uploaded.add(itemResult);
+        }
+
+        if (uploaded.isEmpty()) {
+            throw new RuntimeException("No valid task ZIP payloads found");
+        }
+
+        return Map.of(
+                "message", "Task test cases uploaded successfully",
+                "assignmentCode", assignmentCode,
+                "uploadedCount", uploaded.size(),
+                "items", uploaded
+        );
+    }
+
+    private void validateTaskZipStructure(byte[] zipBytes, int taskOrderNo, String fileName) {
+        Map<Integer, Set<String>> paired = new HashMap<>();
+
+        try (ZipArchiveInputStream zipIn = new ZipArchiveInputStream(new ByteArrayInputStream(zipBytes))) {
+            ZipArchiveEntry entry;
+            while ((entry = zipIn.getNextZipEntry()) != null) {
+                if (entry.isDirectory()) {
+                    throw new RuntimeException("ZIP task " + taskOrderNo + " khong hop le: khong duoc chua thu muc");
+                }
+
+                String entryName = entry.getName();
+                if (entryName == null || entryName.isBlank()) {
+                    throw new RuntimeException("ZIP task " + taskOrderNo + " khong hop le: ten file rong");
+                }
+
+                if (entryName.contains("/") || entryName.contains("\\")) {
+                    throw new RuntimeException("ZIP task " + taskOrderNo + " khong hop le: chi chap nhan file txt o root, khong co folder con");
+                }
+
+                Matcher matcher = Pattern.compile("^(input|output)(\\d+)\\.txt$").matcher(entryName.toLowerCase());
+                if (!matcher.matches()) {
+                    throw new RuntimeException(
+                            "ZIP task " + taskOrderNo + " khong hop le: chi chap nhan inputN.txt hoac outputN.txt (file loi: " + entryName + ")"
+                    );
+                }
+
+                String type = matcher.group(1);
+                int number = Integer.parseInt(matcher.group(2));
+                paired.computeIfAbsent(number, k -> new HashSet<>()).add(type);
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Khong the doc ZIP task " + taskOrderNo + ": " + (fileName == null ? "" : fileName), e);
+        }
+
+        if (paired.isEmpty()) {
+            throw new RuntimeException("ZIP task " + taskOrderNo + " khong hop le: khong co testcase");
+        }
+
+        for (Map.Entry<Integer, Set<String>> entry : paired.entrySet()) {
+            Set<String> types = entry.getValue();
+            if (!types.contains("input") || !types.contains("output")) {
+                throw new RuntimeException(
+                        "ZIP task " + taskOrderNo + " khong hop le: thieu cap input/output cho testcase #" + entry.getKey()
+                );
+            }
+        }
+    }
+
+    private String buildTaskObjectKey(String assignmentCode, String taskName, int fallbackIndex) {
+        int taskIndex = extractTaskIndex(taskName, fallbackIndex);
+        return assignmentCode + "/task_" + taskIndex + ".zip";
+    }
+
+    private int extractTaskIndex(String taskName, int fallbackIndex) {
+        if (taskName == null || taskName.isBlank()) {
+            return fallbackIndex;
+        }
+
+        Matcher matcher = Pattern.compile("(\\d+)").matcher(taskName);
+        if (matcher.find()) {
+            try {
+                return Integer.parseInt(matcher.group(1));
+            } catch (NumberFormatException ignored) {
+                return fallbackIndex;
+            }
+        }
+
+        return fallbackIndex;
     }
     
-    /**
-     * Download test cases ZIP file as stream (for backend proxy pattern)
-     * Used when backend serves as proxy to avoid exposing MinIO directly
-     * @param assignmentCode Assignment code
-     * @return InputStream of ZIP file
-     */
-    public java.io.InputStream downloadTestCasesStream(String assignmentCode) {
-        List<TestCase> testCases = testCaseRepository.findByAssignmentCode(assignmentCode);
-        
-        if (testCases.isEmpty()) {
-            throw new RuntimeException("No test cases found for assignment: " + assignmentCode);
+    public InputStream downloadTaskTestCasesStream(String assignmentCode, int taskOrderNo) {
+        Assignment assignment = assignmentRepository.findByAssignmentCode(assignmentCode)
+                .orElseThrow(() -> new RuntimeException("Assignment not found: " + assignmentCode));
+
+        AssignmentTask assignmentTask = assignmentTaskRepository
+                .findByAssignmentAndOrderNo(assignment, taskOrderNo)
+                .orElseThrow(() -> new RuntimeException("Task not found for assignment: " + assignmentCode + ", order: " + taskOrderNo));
+
+        if (assignmentTask.getObjectKey() == null || assignmentTask.getObjectKey().isBlank()) {
+            throw new RuntimeException("Task has no test cases uploaded: " + assignmentTask.getTaskName());
         }
-        
-        // All test cases share the same ZIP file
-        String zipObjectKey = testCases.get(0).getZipObjectKey();
-        return minioService.downloadFile(zipObjectKey);
+
+        return minioService.downloadFile(assignmentTask.getObjectKey());
     }
 
-    /**
-     * Get all test cases for an assignment
-     */
-    public List<TestCase> getTestCasesByAssignment(String assignmentCode) {
-        return testCaseRepository.findByAssignmentCode(assignmentCode);
+    public List<Map<String, Object>> getTaskDownloadLinks(String assignmentCode, String backendUrl) {
+        Assignment assignment = assignmentRepository.findByAssignmentCode(assignmentCode)
+                .orElseThrow(() -> new RuntimeException("Assignment not found: " + assignmentCode));
+
+        List<AssignmentTask> tasks = assignmentTaskRepository.findByAssignmentOrderByOrderNoAscIdAsc(assignment);
+        List<Map<String, Object>> result = new ArrayList<>();
+
+        for (AssignmentTask task : tasks) {
+            if (task.getObjectKey() == null || task.getObjectKey().isBlank()) {
+                continue;
+            }
+
+            int orderNo = task.getOrderNo() == null ? 0 : task.getOrderNo();
+            String downloadUrl = backendUrl + "/api/test-cases/" + assignmentCode + "/task/" + orderNo + "/download";
+
+            result.add(Map.of(
+                    "orderNo", orderNo,
+                    "taskName", task.getTaskName() == null ? ("Task " + orderNo) : task.getTaskName(),
+                    "downloadUrl", downloadUrl,
+                    "bucket", task.getBucket() == null ? "" : task.getBucket(),
+                    "objectKey", task.getObjectKey()
+            ));
+        }
+
+        return result;
     }
 
-    /**
-     * Get test cases for a specific exercise
-     */
-    public List<TestCase> getTestCasesByExercise(String assignmentCode, String exerciseName) {
-        return testCaseRepository.findByAssignmentCodeAndExerciseName(assignmentCode, exerciseName);
-    }
-
-    /**
-     * Delete all test cases for an assignment
-     */
     @Transactional
     public void deleteTestCasesByAssignment(String assignmentCode) {
-        List<TestCase> testCases = testCaseRepository.findByAssignmentCode(assignmentCode);
-        
-        if (!testCases.isEmpty()) {
-            // Delete ZIP file from MinIO
-            String zipObjectKey = testCases.get(0).getZipObjectKey();
-            minioService.deleteFile(zipObjectKey);
-            
-            // Delete metadata from database
-            testCaseRepository.deleteByAssignmentCode(assignmentCode);
-            
-            System.out.println("Deleted all test cases for assignment: " + assignmentCode);
-        }
-    }
-
-    /**
-     * Check if test cases exist for an assignment
-     */
-    public boolean testCasesExist(String assignmentCode) {
-        return testCaseRepository.existsByAssignmentCode(assignmentCode);
-    }
-
-    /**
-     * Get test case structure (exercises and test numbers) for workflow generation
-     */
-    public Map<String, Integer> getTestCaseStructure(String assignmentCode) {
-        List<TestCase> testCases = testCaseRepository.findByAssignmentCode(assignmentCode);
-        
-        Map<String, Integer> structure = new HashMap<>();
-        for (TestCase testCase : testCases) {
-            structure.merge(testCase.getExerciseName(), 1, Integer::sum);
-        }
-        
-        return structure; // e.g., {"ex1": 3, "ex2": 5, "ex3": 2}
+        assignmentRepository.findByAssignmentCode(assignmentCode).ifPresent(assignment -> {
+            List<AssignmentTask> tasks = assignmentTaskRepository.findByAssignmentOrderByOrderNoAscIdAsc(assignment);
+            for (AssignmentTask task : tasks) {
+                if (task.getObjectKey() != null && !task.getObjectKey().isBlank()) {
+                    minioService.deleteFile(task.getObjectKey());
+                    task.setObjectKey(null);
+                    task.setBucket(null);
+                    assignmentTaskRepository.save(task);
+                }
+            }
+        });
     }
 }

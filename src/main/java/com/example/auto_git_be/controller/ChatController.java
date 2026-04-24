@@ -6,7 +6,6 @@ import com.example.auto_git_be.model.MessageType;
 import com.example.auto_git_be.service.AiService;
 import com.example.auto_git_be.service.MessageService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
@@ -29,7 +28,6 @@ public class ChatController {
 	 */
 	@MessageMapping("/chat.private")
 	public void sendPrivateMessage(@Payload SendMessageRequest request, SimpMessageHeaderAccessor headerAccessor) {
-		try {
 			Long senderId = extractUserId(headerAccessor);
 
 			if (request.getReceiverId() == null) {
@@ -57,9 +55,6 @@ public class ChatController {
 					"/queue/private",
 					message
 			);
-		} catch (Exception e) {
-			log.error("sendPrivateMessage error: {}", e.getMessage(), e);
-		}
 	}
 
 	/**
@@ -68,7 +63,6 @@ public class ChatController {
 	 */
 	@MessageMapping("/chat.class")
 	public void sendClassMessage(@Payload SendMessageRequest request, SimpMessageHeaderAccessor headerAccessor) {
-		try {
 			Long senderId = extractUserId(headerAccessor);
 
 			if (request.getClassroomId() == null) {
@@ -87,9 +81,6 @@ public class ChatController {
 					"/topic/class/" + request.getClassroomId(),
 					message
 			);
-		} catch (Exception e) {
-			log.error("sendClassMessage error: {}", e.getMessage(), e);
-		}
 	}
 
 	private Long extractUserId(SimpMessageHeaderAccessor headerAccessor) {

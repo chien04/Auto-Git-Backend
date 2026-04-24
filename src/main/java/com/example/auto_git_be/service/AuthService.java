@@ -37,12 +37,8 @@ public class AuthService {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
-    /**
-     * Generate Google OAuth URL
-     */
+
     public GoogleAuthUrlResponse getGoogleAuthUrl() {
-        // Use URLEncoder to properly encode redirect URI
-//        String encodedRedirectUri = "http%3A%2F%2Flocalhost%3A3000";
         String encodedRedirectUri = URLEncoder.encode("http://localhost:3000", StandardCharsets.UTF_8);
         String authUrl = "https://accounts.google.com/o/oauth2/v2/auth?" +
                 "client_id=" + googleClientId +
@@ -114,6 +110,7 @@ public class AuthService {
                 .name(user.getName())
                 .userId(user.getId().toString())
                 .role(user.getRole().toString())
+                .profilePicture(user.getProfilePicture())
                 .build();
     }
 

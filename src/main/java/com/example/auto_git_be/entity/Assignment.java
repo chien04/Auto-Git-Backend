@@ -49,6 +49,10 @@ public class Assignment {
     @OneToMany(mappedBy = "assignment", cascade = CascadeType.ALL, orphanRemoval = true)
     @ToString.Exclude
     private List<StudentAssignment> studentAssignments = new ArrayList<>();
+
+    @OneToMany(mappedBy = "assignment", cascade = CascadeType.ALL, orphanRemoval = true)
+    @ToString.Exclude
+    private List<AssignmentTask> tasks = new ArrayList<>();
     
     @Column(name = "is_active")
     private Boolean isActive = true;

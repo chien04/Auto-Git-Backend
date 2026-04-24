@@ -4,6 +4,7 @@ import com.example.auto_git_be.entity.Assignment;
 import com.example.auto_git_be.entity.Student;
 import com.example.auto_git_be.entity.StudentAssignment;
 import com.example.auto_git_be.repository.StudentAssignmentRepository;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,19 +16,14 @@ import java.util.List;
 import java.util.Optional;
 
 @Service
+@RequiredArgsConstructor
 public class StudentAssignmentService {
 
     private static final Logger log = LoggerFactory.getLogger(StudentAssignmentService.class);
 
-    @Autowired
-    private StudentAssignmentRepository studentAssignmentRepository;
+    private final StudentAssignmentRepository studentAssignmentRepository;
+    private final GitHubService githubService;
 
-    @Autowired
-    private GitHubService githubService;
-
-    /**
-     * Update commit count for a student assignment from GitHub
-     */
     @Transactional
     public StudentAssignment updateCommitCount(StudentAssignment studentAssignment) throws Exception {
         try {
@@ -62,45 +58,11 @@ public class StudentAssignmentService {
         }
     }
 
-    /**
-     * Get student assignment by student and assignment
-     */
     public Optional<StudentAssignment> findByStudentAndAssignment(Student student, Assignment assignment) {
         return studentAssignmentRepository.findByStudentAndAssignment(student, assignment);
     }
 
-    /**
-     * Get all student assignments for a student
-     */
-    public List<StudentAssignment> findByStudent(Student student) {
-        return studentAssignmentRepository.findByStudent(student);
-    }
-
-    /**
-     * Get all student assignments for an assignment
-     */
     public List<StudentAssignment> findByAssignment(Assignment assignment) {
         return studentAssignmentRepository.findByAssignment(assignment);
-    }
-
-    /**
-     * Save student assignment
-     */
-    public StudentAssignment save(StudentAssignment studentAssignment) {
-        return studentAssignmentRepository.save(studentAssignment);
-    }
-
-    /**
-     * Delete student assignment
-     */
-    public void delete(StudentAssignment studentAssignment) {
-        studentAssignmentRepository.delete(studentAssignment);
-    }
-
-    /**
-     * Check if student assignment exists
-     */
-    public boolean existsByStudentAndAssignment(Student student, Assignment assignment) {
-        return studentAssignmentRepository.existsByStudentAndAssignment(student, assignment);
     }
 }

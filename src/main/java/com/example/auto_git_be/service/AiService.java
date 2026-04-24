@@ -59,7 +59,7 @@ public class AiService {
         List<ChatMessage> messages = new ArrayList<>();
 
         String systemPrompt = role.equals(User.UserRole.TEACHER.name())
-                ? Constant.SYSTEM_PROMPT_TEACHER
+                ? Constant.SYSTEM_PROMPT_TUTOR
                 : Constant.SYSTEM_PROMPT_TUTOR;
         messages.add(new SystemMessage(systemPrompt));
 

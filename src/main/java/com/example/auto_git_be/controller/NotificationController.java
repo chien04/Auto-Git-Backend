@@ -21,53 +21,37 @@ public class NotificationController {
     @GetMapping
     public ResponseEntity<List<Map<String, Object>>> getNotifications(
             @RequestHeader("Authorization") String authHeader) {
-        try {
-            String token = authHeader.substring(7);
-            User user = authService.getUserFromToken(token);
-            return ResponseEntity.ok(notificationService.getNotifications(user.getId()));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
-        }
+        String token = authHeader.substring(7);
+        User user = authService.getUserFromToken(token);
+        return ResponseEntity.ok(notificationService.getNotifications(user.getId()));
     }
 
     @PatchMapping("/{notificationId}/read")
     public ResponseEntity<Void> markAsRead(
             @PathVariable Long notificationId,
             @RequestHeader("Authorization") String authHeader) {
-        try {
-            String token = authHeader.substring(7);
-            User user = authService.getUserFromToken(token);
-            notificationService.markAsRead(user.getId(), notificationId);
-            return ResponseEntity.ok().build();
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
-        }
+        String token = authHeader.substring(7);
+        User user = authService.getUserFromToken(token);
+        notificationService.markAsRead(user.getId(), notificationId);
+        return ResponseEntity.ok().build();
     }
 
     @DeleteMapping("/{notificationId}")
     public ResponseEntity<Void> deleteNotification(
             @PathVariable Long notificationId,
             @RequestHeader("Authorization") String authHeader) {
-        try {
-            String token = authHeader.substring(7);
-            User user = authService.getUserFromToken(token);
-            notificationService.deleteNotification(user.getId(), notificationId);
-            return ResponseEntity.ok().build();
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
-        }
+        String token = authHeader.substring(7);
+        User user = authService.getUserFromToken(token);
+        notificationService.deleteNotification(user.getId(), notificationId);
+        return ResponseEntity.ok().build();
     }
 
     @PatchMapping("/read-all")
     public ResponseEntity<Void> markAllAsRead(
             @RequestHeader("Authorization") String authHeader) {
-        try {
-            String token = authHeader.substring(7);
-            User user = authService.getUserFromToken(token);
-            notificationService.markAllAsRead(user.getId());
-            return ResponseEntity.ok().build();
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
-        }
+        String token = authHeader.substring(7);
+        User user = authService.getUserFromToken(token);
+        notificationService.markAllAsRead(user.getId());
+        return ResponseEntity.ok().build();
     }
 }

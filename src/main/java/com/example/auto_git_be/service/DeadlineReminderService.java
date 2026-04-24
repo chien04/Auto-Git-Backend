@@ -32,31 +32,21 @@ public class DeadlineReminderService {
         this.emailService = emailService;
     }
 
-    /**
-     * Schedule reminder jobs cho tất cả các bài tập có deadline trong ngày
-     */
     public void scheduleAllDeadlineReminders() throws SchedulerException {
-        // Xóa tất cả các job cũ
         clearAllJobs();
 
-        // Lấy ngày hiện tại
         LocalDate today = LocalDate.now();
         LocalDateTime startOfDay = today.atStartOfDay();
         LocalDateTime endOfDay = today.atTime(23, 59, 59);
 
-        // Query các bài tập có deadline trong ngày hôm nay
         List<Assignment> assignmentsWithDeadlineToday = assignmentRepository
                 .findByDeadlineBetween(startOfDay, endOfDay);
 
-        // Với mỗi bài tập, tạo một job chạy trước deadline 3 tiếng
         for (Assignment assignment : assignmentsWithDeadlineToday) {
             scheduleReminderJob(assignment);
         }
     }
 
-    /**
-     * Xóa tất cả các job reminder cũ
-     */
     private void clearAllJobs() throws SchedulerException {
         GroupMatcher<JobKey> groupMatcher = GroupMatcher.jobGroupEquals(GROUP_NAME);
         Set<JobKey> jobKeys = scheduler.getJobKeys(groupMatcher);
@@ -66,9 +56,6 @@ public class DeadlineReminderService {
         }
     }
 
-    /**
-     * Schedule một job reminder cho một bài tập cụ thể
-     */
     public void scheduleReminderJob(Assignment assignment) throws SchedulerException {
         LocalDateTime deadline = assignment.getDeadline();
         
@@ -78,7 +65,6 @@ public class DeadlineReminderService {
 
         LocalDateTime reminderTime = deadline.minusMinutes(1);
 
-        // Kiểm tra nếu thời gian reminder đã qua thì không tạo job
         if (reminderTime.isBefore(LocalDateTime.now())) {
             return;
         }
@@ -87,19 +73,16 @@ public class DeadlineReminderService {
         JobKey jobKey = new JobKey(jobId, GROUP_NAME);
         TriggerKey triggerKey = new TriggerKey("trigger_" + jobId, GROUP_NAME);
 
-        // Truyền dữ liệu cho job
         JobDataMap jobDataMap = new JobDataMap();
         jobDataMap.put("assignmentId", assignment.getId());
         jobDataMap.put("assignmentCode", assignment.getAssignmentCode());
         jobDataMap.put("emailService", emailService);
         
-        // Tạo JobDetail
         JobDetail jobDetail = JobBuilder.newJob(DeadlineReminderJob.class)
                 .withIdentity(jobKey)
                 .usingJobData(jobDataMap)
                 .build();
 
-        // Tạo trigger với thời gian cụ thể
         Trigger trigger = TriggerBuilder.newTrigger()
                 .withIdentity(triggerKey)
                 .startAt(Date.from(reminderTime.atZone(ZoneId.systemDefault()).toInstant()))
@@ -108,9 +91,6 @@ public class DeadlineReminderService {
         scheduler.scheduleJob(jobDetail, trigger);
     }
 
-    /**
-     * Xóa job reminder cho một bài tập cụ thể
-     */
     public void cancelReminderJob(String assignmentCode) throws SchedulerException {
         String jobId = "reminder_" + assignmentCode;
         JobKey jobKey = new JobKey(jobId, GROUP_NAME);
@@ -120,9 +100,6 @@ public class DeadlineReminderService {
         }
     }
 
-    /**
-     * Lấy danh sách tất cả các job reminder đang chạy
-     */
     public Set<JobKey> getAllScheduledJobs() throws SchedulerException {
         GroupMatcher<JobKey> groupMatcher = GroupMatcher.jobGroupEquals(GROUP_NAME);
         return scheduler.getJobKeys(groupMatcher);

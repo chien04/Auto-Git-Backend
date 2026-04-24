@@ -216,7 +216,6 @@ public class NotificationService {
                 return parsed;
             }
         } catch (Exception ignored) {
-            // Legacy plain text notification.
         }
 
         return Map.of("message", rawMessage);

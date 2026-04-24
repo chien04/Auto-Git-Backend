@@ -5,6 +5,7 @@ import com.example.auto_git_be.entity.Student;
 import com.example.auto_git_be.entity.StudentAssignment;
 import com.example.auto_git_be.entity.User;
 import com.example.auto_git_be.repository.StudentRepository;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,96 +19,38 @@ import java.util.Map;
 import java.util.Optional;
 
 @Service
+@RequiredArgsConstructor
 public class StudentService {
 
     private static final Logger log = LoggerFactory.getLogger(StudentService.class);
 
-    @Autowired
-    private StudentRepository studentRepository;
+    private final StudentRepository studentRepository;
 
-    @Autowired
-    private GitHubService githubService;
+    private final GitHubService githubService;
 
-    /**
-     * Update commit count for a student assignment from GitHub
-     * @deprecated This method is deprecated. Use StudentAssignmentService.updateCommitCount() instead.
-     * This method kept for backward compatibility but should work with StudentAssignment entity.
-     */
-    @Deprecated
-    public Student updateCommitCount(Student student, ClassRoom classroom) throws Exception {
-        // This method is now invalid with the new architecture
-        // Student entity no longer has commitCount, branchName, etc.
-        // These fields are now in StudentAssignment entity
-        throw new UnsupportedOperationException(
-                "updateCommitCount(Student, ClassRoom) is no longer supported. " +
-                "Use StudentAssignmentService.updateCommitCount(StudentAssignment) instead."
-        );
-    }
-
-    /**
-     * Get student by user and classroom
-     */
     public Optional<Student> findByUserAndClassRoom(User user, ClassRoom classRoom) {
         return studentRepository.findByUserAndClassRoom(user, classRoom);
     }
 
-    /**
-     * Get student by user and classroom (non-Optional version)
-     */
-    public Student getStudentByUserAndClass(User user, ClassRoom classRoom) {
-        return findByUserAndClassRoom(user, classRoom).orElse(null);
-    }
-
-    /**
-     * Get all students in a classroom
-     */
     public List<Student> findByClassRoom(ClassRoom classRoom) {
         return studentRepository.findByClassRoom(classRoom);
-    }
-
-    /**
-     * Save student
-     */
-    public Student save(Student student) {
-        return studentRepository.save(student);
-    }
-
-    /**
-     * Delete student
-     */
-    public void delete(Student student) {
-        studentRepository.delete(student);
-    }
-
-    /**
-     * Check if student exists in classroom
-     */
-    public boolean existsByUserAndClassRoom(User user, ClassRoom classRoom) {
-        return studentRepository.existsByUserAndClassRoom(user, classRoom);
     }
 
     public List<Student> findByUser(User user) {
         return studentRepository.findByUser(user);
     }
 
-    /**
-     * Get commit activity by user for the last 28 days
-     * Returns a map of date -> number of commits on that day
-     */
     public Map<LocalDate, Integer> getCommitActivityByUser(User user) {
         Map<java.time.LocalDate, Integer> activityMap = new HashMap<>();
         
-        // Initialize last 28 days with 0 commits
         java.time.LocalDate today = java.time.LocalDate.now();
         for (int i = 27; i >= 0; i--) {
             java.time.LocalDate date = today.minusDays(i);
             activityMap.put(date, 0);
         }
 
-        // Get all enrollments for this user
         List<Student> enrollments = studentRepository.findByUser(user);
 
-        // For each enrollment, get commit history from all student assignments
         for (Student student : enrollments) {
             try {
                 // Get all assignments this student is enrolled in
