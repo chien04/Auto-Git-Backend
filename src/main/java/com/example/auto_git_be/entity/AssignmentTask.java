@@ -40,12 +40,6 @@ public class AssignmentTask {
     @Column(name = "order_no")
     private Integer orderNo;
 
-    @Column(name = "bucket", length = 255)
-    private String bucket;
-
-    @Column(name = "object_key", length = 500)
-    private String objectKey;
-
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -60,4 +54,11 @@ public class AssignmentTask {
             orphanRemoval = true
     )
     private List<StudentTaskResult> studentTaskResults = new ArrayList<>();
+
+    @OneToMany(
+            mappedBy = "assignmentTask",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
+    )
+    private List<TestCase>  testCases = new ArrayList<>();
 }

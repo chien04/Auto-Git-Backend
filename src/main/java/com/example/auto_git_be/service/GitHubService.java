@@ -175,4 +175,29 @@ public class GitHubService {
             throw e;
         }
     }
+
+    public String pushStudentCode(String repoName, String branchName, String filePath, String sourceCode, String commitMessage) throws IOException {
+        String repoFullName = repoName.replace("https://github.com/", "");
+
+        GitHub gh = getGitHub();
+        GHRepository repo = gh.getRepository(repoFullName);
+
+        try {
+            GHContent existingFile = repo.getFileContent(filePath, branchName);
+            GHContentUpdateResponse response = existingFile.update(sourceCode, commitMessage, branchName);
+            return response.getCommit().getSHA1();
+
+        } catch (GHFileNotFoundException e) {
+            GHContentUpdateResponse response = repo.createContent()
+                    .branch(branchName)
+                    .path(filePath)
+                    .content(sourceCode)
+                    .message(commitMessage)
+                    .commit();
+
+            return response.getCommit().getSHA1();
+        }
+    }
+
+
 }

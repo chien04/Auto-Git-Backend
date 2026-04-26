@@ -44,4 +44,10 @@ public class StudentTaskResult {
 
     @Column(name = "error_message")
     private String errorMessage;
+
+    @Column(name = "commit_hash")
+    private String commitHash;
+
+    @Column(name = "source_code")
+    private String sourceCode;
 }

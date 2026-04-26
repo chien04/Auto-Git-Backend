@@ -2,6 +2,7 @@ package com.example.auto_git_be.utils;
 
 public final class Constant {
     private Constant() {}
+
     public static final Long AI_ID = 999999999L;
 
     public static final String SYSTEM_PROMPT_TUTOR = """

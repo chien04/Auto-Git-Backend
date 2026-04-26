@@ -64,3 +64,5 @@ mvnw.cmd
 ### Application specific ###
 # Không ignore các file migration SQL
 !src/main/resources/db/migration/*.sql
+
+/local_cache/

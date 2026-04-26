@@ -11,10 +11,8 @@ import com.example.auto_git_be.dto.comment.CreateCommentRequest;
 import com.example.auto_git_be.entity.*;
 import com.example.auto_git_be.service.*;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -277,41 +275,6 @@ public class AssignmentController {
         return ResponseEntity.ok().build();
     }
 
-    @PostMapping("/{assignmentCode}/workspace/setup")
-    public ResponseEntity<Map<String, String>> setupAssignmentWorkspace(
-            @PathVariable String assignmentCode,
-            @RequestBody(required = false) Map<String, String> request,
-            @RequestHeader("Authorization") String authHeader) throws IOException {
-        String token = authHeader.substring(7);
-        User teacher = authService.getUserFromToken(token);
-
-        Assignment assignment = assignmentService.getAssignmentByCode(assignmentCode);
-        if (assignment == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Assignment not found"));
-        }
-
-        if (!assignment.getClassRoom().getTeacher().getId().equals(teacher.getId())) {
-            return ResponseEntity.status(403).body(Map.of("error", "Not authorized"));
-        }
-
-        String requestLocalPath = request != null ? request.get("localPath") : null;
-        Optional<TeacherAssignment> teacherAssignment = teacherAssignmentService.getTeacherAssignment(teacher, assignment);
-        String localPath = (requestLocalPath != null && !requestLocalPath.trim().isEmpty())
-                ? requestLocalPath.trim()
-                : teacherAssignment.map(TeacherAssignment::getLocalPath).orElse(null);
-
-        if (localPath == null || localPath.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Local path not found. Please create assignment first."));
-        }
-        List<StudentAssignment> studentAssignments = studentAssignmentService.findByAssignment(assignment);
-        String workspacePath = assignmentWorkspaceService.setupAssignmentWorkspace(assignment, studentAssignments, token, localPath);
-
-        return ResponseEntity.ok(Map.of(
-                "message", "Workspace setup completed",
-                "workspacePath", workspacePath
-        ));
-    }
-
     @PostMapping("/{assignmentCode}/workspace/sync")
     public ResponseEntity<Map<String, String>> syncAssignmentWorkspace(
             @PathVariable String assignmentCode,
@@ -330,17 +293,14 @@ public class AssignmentController {
         }
 
         String requestLocalPath = request != null ? request.get("localPath") : null;
-        Optional<TeacherAssignment> teacherAssignment = teacherAssignmentService.getTeacherAssignment(teacher, assignment);
-        String localPath = (requestLocalPath != null && !requestLocalPath.trim().isEmpty())
-                ? requestLocalPath.trim()
-                : teacherAssignment.map(TeacherAssignment::getLocalPath).orElse(null);
+        String localPath = requestLocalPath != null ? requestLocalPath.trim() : null;
 
         if (localPath == null || localPath.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Local path not found. Please setup workspace first."));
+            return ResponseEntity.badRequest().body(Map.of("error", "Local path not found."));
         }
         List<StudentAssignment> studentAssignments = studentAssignmentService.findByAssignment(assignment);
 
-        assignmentWorkspaceService.syncAssignmentWorkspace(assignment, studentAssignments, localPath);
+        assignmentWorkspaceService.syncAssignmentWorkspace(studentAssignments, localPath);
 
         return ResponseEntity.ok(Map.of(
                 "message", "Workspace synced successfully. All student branches are up to date."

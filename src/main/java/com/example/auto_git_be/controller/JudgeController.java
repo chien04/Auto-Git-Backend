@@ -1,0 +1,64 @@
+package com.example.auto_git_be.controller;
+
+import com.example.auto_git_be.dto.execute.ExecuteRequest;
+import com.example.auto_git_be.dto.execute.ExecuteResponse;
+import com.example.auto_git_be.dto.execute.SubmitRequest;
+import com.example.auto_git_be.dto.execute.SubmitResponse;
+import com.example.auto_git_be.entity.Assignment;
+import com.example.auto_git_be.entity.ClassRoom;
+import com.example.auto_git_be.entity.Student;
+import com.example.auto_git_be.entity.User;
+import com.example.auto_git_be.repository.AssignmentRepository;
+import com.example.auto_git_be.repository.StudentRepository;
+import com.example.auto_git_be.service.AuthService;
+import com.example.auto_git_be.service.JudgeService;
+import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.io.IOException;
+
+@RestController
+@RequestMapping("api/judge")
+@RequiredArgsConstructor
+public class JudgeController {
+
+    private final AuthService authService;
+    private final JudgeService judgeService;
+    private final StudentRepository studentRepository;
+    private final AssignmentRepository assignmentRepository;
+
+    @PostMapping("/run")
+    public ResponseEntity<ExecuteResponse> runCode(
+            @RequestBody ExecuteRequest request) {
+
+        ExecuteResponse response = judgeService.runTests(request);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/submit")
+    public ResponseEntity<SubmitResponse> submitCode(
+            @RequestBody SubmitRequest request,
+            @RequestHeader("Authorization" ) String authHeader
+    ) throws IOException {
+        String token = authHeader.substring(7);
+        User user = authService.getUserFromToken(token);
+
+        SubmitResponse response;
+        Assignment assignment = assignmentRepository.findByAssignmentCode(request.getAssignmentCode())
+                .orElseThrow(() -> new EntityNotFoundException("Assignment not found"));
+
+        ClassRoom classRoom = assignment.getClassRoom();
+
+        if("STUDENT".equals(user.getRole().name())){
+            Student student = studentRepository.findByUserAndClassRoom(user, classRoom)
+                    .orElseThrow(() -> new EntityNotFoundException("Student not found"));
+            response = judgeService.submitCodeForStudent(student, request);
+        }
+        else
+            response = judgeService.submitCode(request);
+
+        return ResponseEntity.ok(response);
+    }
+}

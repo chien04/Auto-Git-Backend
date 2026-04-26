@@ -4,13 +4,9 @@ import com.example.auto_git_be.dto.assignment.AssignmentTaskCreateRequest;
 import com.example.auto_git_be.dto.assignment.JoinAssignmentResponse;
 import com.example.auto_git_be.dto.assignment.ScoreUpdateRequest;
 import com.example.auto_git_be.dto.assignment.TaskDTO;
+import com.example.auto_git_be.dto.execute.TestCaseDTO;
 import com.example.auto_git_be.entity.*;
-import com.example.auto_git_be.repository.AssignmentTaskRepository;
-import com.example.auto_git_be.repository.AssignmentRepository;
-import com.example.auto_git_be.repository.CommentRepository;
-import com.example.auto_git_be.repository.StudentRepository;
-import com.example.auto_git_be.repository.StudentAssignmentRepository;
-import com.example.auto_git_be.repository.TeacherAssignmentRepository;
+import com.example.auto_git_be.repository.*;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import okhttp3.internal.concurrent.Task;
@@ -33,6 +29,7 @@ public class AssignmentService {
     
     private final AssignmentRepository assignmentRepository;
     private final AssignmentTaskRepository assignmentTaskRepository;
+    private final TestCaseRepository testCaseRepository;
     private final StudentRepository studentRepository;
     private final StudentAssignmentRepository studentAssignmentRepository;
     private final TeacherAssignmentRepository teacherAssignmentRepository;
@@ -87,8 +84,23 @@ public class AssignmentService {
             Assignment savedAssignment = assignmentRepository.save(assignment);
 
             List<AssignmentTask> taskEntities = buildTaskEntities(savedAssignment, description, tasks);
-            assignmentTaskRepository.saveAll(taskEntities);
+            List<AssignmentTask> savedTasks = assignmentTaskRepository.saveAll(taskEntities);
 
+            List<TestCase> testCaseEntities = new ArrayList<>();
+            if (tasks != null && !tasks.isEmpty()) {
+                for (int i = 0; i < tasks.size(); i++) {
+                    AssignmentTaskCreateRequest taskDTO = tasks.get(i);
+                    AssignmentTask savedTask = savedTasks.get(i);
+
+                    if (taskDTO.getSampleTestCases() != null && !taskDTO.getSampleTestCases().isEmpty()) {
+                        List<TestCase> testCasesForThisTask = buildTestCases(savedTask, taskDTO);
+                        testCaseEntities.addAll(testCasesForThisTask);
+                    }
+                }
+                if (!testCaseEntities.isEmpty()) {
+                    testCaseRepository.saveAll(testCaseEntities);
+                }
+            }
             return savedAssignment;
             
         } catch (Exception e) {
@@ -128,6 +140,23 @@ public class AssignmentService {
 
         return taskEntities;
     }
+
+    private List<TestCase> buildTestCases(
+            AssignmentTask assignmentTask,
+            AssignmentTaskCreateRequest task) {
+        List<TestCase> testCases = new ArrayList<>();
+        for (TestCaseDTO testCaseDTO : task.getSampleTestCases()) {
+            TestCase testCase = new TestCase();
+            testCase.setOrdinal(testCaseDTO.getOrdinal());
+            testCase.setInputContent(testCaseDTO.getInput());
+            testCase.setOutputContent(testCaseDTO.getOutput());
+            testCase.setSample(true);
+            testCase.setAssignmentTask(assignmentTask);
+            testCases.add(testCase);
+        }
+        return testCases;
+    }
+
 
     @Transactional
     public List<TaskDTO> getTasks(User user, String assignmentCode) {
