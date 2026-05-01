@@ -14,6 +14,6 @@ import java.util.List;
 @Builder
 public class AiChatRequest {
     private String message;
-    private String workspace;
+    private String assignmentCode;
     private List<FileContext> files = new ArrayList<>();
 }

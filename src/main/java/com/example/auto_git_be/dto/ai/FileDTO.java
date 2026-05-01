@@ -11,4 +11,5 @@ public class FileDTO {
     private String fileName;
     private String fileContent;
     private String hashcode;
+    private long taskOrderNo;
 }

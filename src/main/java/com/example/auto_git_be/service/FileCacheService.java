@@ -20,21 +20,21 @@ public class FileCacheService {
         return String.format("file_hash:%d:%s:%s:%s", userId, assignmentCode, studentName, filename);
     }
 
-    public boolean isIdentical(Long userId, String assignmentCode, String studentName, String filename, String newHash) {
-        String key = buildKey(userId, assignmentCode, studentName, filename);
+    public boolean isIdentical(Long userId, String assignmentCode, String studentName, String taskOrderNo, String newHash) {
+        String key = buildKey(userId, assignmentCode, studentName, taskOrderNo);
         String savedHash = redisTemplate.opsForValue().get(key);
 
         if (savedHash != null && savedHash.equals(newHash)) {
-            log.info("Cache hit: File {} không thay đổi.", filename);
+            log.info("Cache hit: File {} không thay đổi.", taskOrderNo);
             return true;
         }
         return false;
     }
 
-    public void updateCache(Long userId, String assignmentCode, String studentName, String filename, String newHash) {
-        String key = buildKey(userId, assignmentCode, studentName, filename);
+    public void updateCache(Long userId, String assignmentCode, String studentName, String taskOrderNo, String newHash) {
+        String key = buildKey(userId, assignmentCode, studentName, taskOrderNo);
         redisTemplate.opsForValue().set(key, newHash, CACHE_EXPIRATION, TimeUnit.DAYS);
-        log.info("Cache updated: Đã lưu hash mới cho file {}", filename);
+        log.info("Cache updated: Đã lưu hash mới cho file {}", taskOrderNo);
     }
 
 }

@@ -160,26 +160,33 @@
 		<dependency>
 			<groupId>dev.langchain4j</groupId>
 			<artifactId>langchain4j</artifactId>
-			<version>0.36.2</version>
+			<version> 1.0.0-beta2</version>
 		</dependency>
 
 		<dependency>
 			<groupId>dev.langchain4j</groupId>
 			<artifactId>langchain4j-ollama</artifactId>
-			<version>0.36.2</version>
+			<version> 1.0.0-beta2</version>
 		</dependency>
 
 		<dependency>
 			<groupId>dev.langchain4j</groupId>
 			<artifactId>langchain4j-qdrant</artifactId>
-			<version>0.36.2</version>
+			<version> 1.0.0-beta2</version>
 		</dependency>
 
 		<dependency>
 			<groupId>dev.langchain4j</groupId>
 			<artifactId>langchain4j-open-ai</artifactId>
-			<version>0.36.2</version>
+			<version> 1.0.0-beta2</version>
 		</dependency>
+
+		<dependency>
+			<groupId>io.qdrant</groupId>
+			<artifactId>client</artifactId>
+			<version>1.13.0</version>
+		</dependency>
+
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-redis</artifactId>

@@ -33,7 +33,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/health").permitAll()
                 .requestMatchers("/api/assignment/update-score").permitAll()
-                .requestMatchers("/api/test-cases/*/download-urls").permitAll()
+                .requestMatchers("/api/ai/test-vector-score").permitAll()
                 .requestMatchers("/api/test-cases/*/task/*/download").permitAll()
                 .requestMatchers("/ws-notifications/**").permitAll()
                     .requestMatchers("/api/flowise/analyze-file").permitAll()

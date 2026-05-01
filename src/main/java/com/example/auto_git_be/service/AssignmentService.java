@@ -59,11 +59,12 @@ public class AssignmentService {
             GHRepository ghRepo = gitHubService.createRepository(repoName, repoDescription);
 
             gitHubService.createBranch(ghRepo.getFullName(), "teacher", ghRepo.getDefaultBranch());
-            gitHubService.createWorkflowFile(ghRepo.getFullName(), "teacher", assignmentCode);
+            gitHubService.deleteFileInRepo(ghRepo.getFullName(), "README.md", "teacher");
+            gitHubService.createMultipleFilesInRepo(ghRepo.getFullName(), "teacher", tasks);
 
             String effectiveDescription = description;
-            if (tasks != null && !tasks.isEmpty()) {
-                String firstTaskDescription = tasks.get(0).getDescription();
+            if (!tasks.isEmpty()) {
+                String firstTaskDescription = tasks.getFirst().getDescription();
                 if (firstTaskDescription != null && !firstTaskDescription.isBlank()) {
                     effectiveDescription = firstTaskDescription;
                 }
@@ -87,7 +88,7 @@ public class AssignmentService {
             List<AssignmentTask> savedTasks = assignmentTaskRepository.saveAll(taskEntities);
 
             List<TestCase> testCaseEntities = new ArrayList<>();
-            if (tasks != null && !tasks.isEmpty()) {
+            if (!tasks.isEmpty()) {
                 for (int i = 0; i < tasks.size(); i++) {
                     AssignmentTaskCreateRequest taskDTO = tasks.get(i);
                     AssignmentTask savedTask = savedTasks.get(i);
@@ -155,26 +156,6 @@ public class AssignmentService {
             testCases.add(testCase);
         }
         return testCases;
-    }
-
-
-    @Transactional
-    public List<TaskDTO> getTasks(User user, String assignmentCode) {
-        List<TaskDTO> tasks = new ArrayList<>();
-        StudentAssignment studentAssignment = getStudentAssignmentInfo(assignmentCode, user);
-        List<StudentTaskResult> studentTaskResults = studentAssignment.getStudentTaskResults();
-        for (StudentTaskResult st : studentTaskResults) {
-            TaskDTO dto = new TaskDTO();
-            dto.setOrderNo(st.getAssignmentTask().getOrderNo());
-            dto.setStatus(st.getStatus());
-            dto.setPass(st.getPass());
-            dto.setScore(st.getScore());
-            dto.setLanguage(st.getLanguage());
-            dto.setTotal(st.getTotal());
-            dto.setErrorMessage(st.getErrorMessage());
-            tasks.add(dto);
-        }
-        return tasks;
     }
 
     public Assignment getAssignmentByCode(String assignmentCode) {
@@ -294,23 +275,6 @@ public class AssignmentService {
                     .build();
             
             studentAssignmentRepository.save(studentAssignment);
-            
-            // Auto-create worktree for teacher
-            try {
-                User teacher = assignment.getClassRoom().getTeacher();
-                Optional<TeacherAssignment> teacherAssignment = teacherAssignmentService.getTeacherAssignment(teacher, assignment);
-                
-                if (teacherAssignment.isPresent() && teacherAssignment.get().getLocalPath() != null) {
-                    String teacherLocalPath = teacherAssignment.get().getLocalPath();
-                    
-                    if (assignmentWorkspaceService.isWorkspaceSetup(teacherLocalPath)) {
-                        List<StudentAssignment> allStudents = studentAssignmentRepository.findByAssignment(assignment);
-                        assignmentWorkspaceService.updateAssignmentWorkspaceAndCreateWorktree(assignment, allStudents, teacherLocalPath);
-                    }
-                }
-            } catch (Exception workspaceError) {
-                // Don't fail a student joins if worktree creation fails
-            }
 
             return JoinAssignmentResponse.builder()
                     .repoUrl(assignment.getRepoUrl())

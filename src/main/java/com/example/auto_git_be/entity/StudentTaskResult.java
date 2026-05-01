@@ -42,12 +42,18 @@ public class StudentTaskResult {
     @Column(name = "status")
     private String status;
 
-    @Column(name = "error_message")
+    @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
     @Column(name = "commit_hash")
     private String commitHash;
 
-    @Column(name = "source_code")
+    @Column(name = "source_code", columnDefinition = "TEXT")
     private String sourceCode;
+
+    @Column(name = "execution_time")
+    private Double time;
+
+    @Column(name = "memory_used")
+    private Integer memory;
 }

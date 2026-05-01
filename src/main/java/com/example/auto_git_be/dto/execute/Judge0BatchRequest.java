@@ -12,5 +12,5 @@ import java.util.List;
 @NoArgsConstructor
 public class Judge0BatchRequest {
     @JsonProperty("submissions")
-    List<Judge0IndividualDTO> submissions;
+    private List<Judge0IndividualDTO> submissions;
 }

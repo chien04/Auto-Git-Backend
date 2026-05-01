@@ -6,6 +6,7 @@ import com.example.auto_git_be.repository.*;
 import com.example.auto_git_be.utils.Language;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,6 +15,7 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -113,17 +115,24 @@ public class JudgeService {
         AssignmentTask task = assignmentTaskRepository.findByAssignmentAndOrderNo(assignment, request.getTaskOrderNo())
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy Task số " + request.getTaskOrderNo()));
 
-        List<Integer> judgeResults = executeJudge0Evaluation(task, request.getLanguage(), request.getSourceCode());
-        int passed = judgeResults.get(0);
-        int total = judgeResults.get(1);
+        EvaluationResult evalResult = executeJudge0Evaluation(task, request.getLanguage(), request.getSourceCode());
+        int passed = evalResult.getPassed();
+        int total = evalResult.getTotal();
+        Double time = evalResult.getMaxTime();
+        int memory = evalResult.getMaxMemory();
+        String finalStatus = evalResult.getOverallStatus();
+        String finalErrorMessage = evalResult.getErrorMessage();
 
         int score = (int) Math.round((double) passed / total * 100);
 
         return SubmitResponse.builder()
+                .time(time)
+                .memory(memory)
                 .score(score)
                 .passedTestCases(passed)
                 .totalTestCases(total)
-                .status(score == 100 ? "Accepted" : "Wrong Answer")
+                .status(finalStatus)
+                .errorMessage(finalErrorMessage)
                 .build();
     }
 
@@ -138,12 +147,15 @@ public class JudgeService {
         StudentAssignment studentAssignment = studentAssignmentRepository.findByStudentAndAssignment(student, assignment)
                 .orElseThrow(() -> new EntityNotFoundException("Assignment not found"));
 
-        List<Integer> judgeResults = executeJudge0Evaluation(task, request.getLanguage(), request.getSourceCode());
-        int passed = judgeResults.get(0);
-        int total = judgeResults.get(1);
+        EvaluationResult evalResult = executeJudge0Evaluation(task, request.getLanguage(), request.getSourceCode());
+        int passed = evalResult.getPassed();
+        int total = evalResult.getTotal();
+        Double time = evalResult.getMaxTime();
+        int memory = evalResult.getMaxMemory();
+        String finalStatus = evalResult.getOverallStatus();
+        String finalErrorMessage = evalResult.getErrorMessage();
 
-        double score = (double) passed / total * 100;
-        String status = (score == 100) ? "Accepted" : "Wrong Answer";
+        double score = (double) passed / total * 10;
 
         String commitHash = gitHubService.pushStudentCode(
                 assignment.getRepoName(),
@@ -160,9 +172,12 @@ public class JudgeService {
                 .score(score)
                 .pass(passed)
                 .total(total)
-                .status(status)
+                .status(finalStatus)
                 .commitHash(commitHash)
                 .sourceCode(request.getSourceCode())
+                .time(time)
+                .memory(memory)
+                .errorMessage(finalErrorMessage)
                 .build();
 
         studentTaskResultRepository.save(taskResult);
@@ -171,11 +186,13 @@ public class JudgeService {
                 .score(score)
                 .passedTestCases(passed)
                 .totalTestCases(total)
-                .status(score == 100 ? "Accepted" : "Wrong Answer")
+                .status(finalStatus)
+                .time(time)
+                .memory(memory)
                 .build();
     }
 
-    private List<Integer> executeJudge0Evaluation(AssignmentTask task, String language, String sourceCode) {
+    private EvaluationResult executeJudge0Evaluation(AssignmentTask task, String language, String sourceCode) {
         List<TestCase> testCases = testCaseRepository.findByAssignmentTaskAndIsSampleFalse(task);
         if (testCases == null || testCases.isEmpty()) {
             throw new RuntimeException("Lỗi: Bài tập này chưa được giáo viên upload Test Case.");
@@ -194,8 +211,12 @@ public class JudgeService {
             String outputContent = localCacheService.getTestcaseContent(
                     task.getId(), tc.getOutputFileUrl(), localOutName);
 
+            String encodedSource = Base64.getEncoder().encodeToString(sourceCode.getBytes());
+            String encodedStdin = Base64.getEncoder().encodeToString(inputContent.getBytes());
+            String encodedExpectedOutput = Base64.getEncoder().encodeToString(outputContent.getBytes());
+
             submissionsList.add(new Judge0IndividualDTO(
-                    sourceCode, langId, inputContent, outputContent
+                    encodedSource, langId, encodedStdin, encodedExpectedOutput
             ));
         }
 
@@ -203,14 +224,15 @@ public class JudgeService {
         List<Judge0TokenResponse> tokenList;
         try {
             tokenList = judgeWebClient.post()
-                    .uri("/submissions/batch?base64_encoded=false")
+                    .uri("/submissions/batch?base64_encoded=true")
                     .bodyValue(payload)
                     .retrieve()
                     .bodyToFlux(Judge0TokenResponse.class)
                     .collectList()
                     .block();
-        } catch (Exception e) {
-            throw new RuntimeException("Lỗi gửi dữ liệu submit sang Judge0", e);
+        } catch (WebClientResponseException ex) {
+            String errorBody = ex.getResponseBodyAsString();
+            throw new RuntimeException("Judge0 trả về lỗi " + ex.getStatusCode() + " - Chi tiết: " + errorBody, ex);
         }
 
         if (tokenList == null || tokenList.isEmpty()) {
@@ -224,13 +246,44 @@ public class JudgeService {
         Judge0BatchResponse resultPayload = fetchResultsWithPolling(tokens);
 
         int passed = 0;
+        double maxTime = 0.0;
+        int maxMemory = 0;
+        String overallStatus = "Accepted";
+        String errorMessage = null;
+
         for (Judge0ResultDTO res : resultPayload.getSubmissions()) {
-            if (res.getStatus() != null && res.getStatus().getId() == 3) {
-                passed++;
+            int currentStatusId = (res.getStatus() != null) ? res.getStatus().getId() : 0;
+
+            if (currentStatusId == 3) {
+                passed++; // ID 3 là Accepted
+            } else if ("Accepted".equals(overallStatus)) {
+                overallStatus = mapJudge0StatusToText(currentStatusId);
+
+                if (currentStatusId == 6) {
+                    errorMessage = res.getCompileOutput();
+                } else {
+                    errorMessage = res.getStderr();
+                }
+            }
+            if (res.getTime() != null) {
+                try {
+                    double t = Double.parseDouble(res.getTime());
+                    maxTime = Math.max(maxTime, t);
+                } catch (NumberFormatException ignored) {}
+            }
+            if (res.getMemory() != null) {
+                maxMemory = Math.max(maxMemory, res.getMemory());
             }
         }
 
-        return List.of(passed, testCases.size());
+        return EvaluationResult.builder()
+                .passed(passed)
+                .total(testCases.size())
+                .maxTime(maxTime)
+                .maxMemory(maxMemory)
+                .overallStatus(overallStatus)
+                .errorMessage(errorMessage)
+                .build();
     }
 
     private Judge0BatchResponse fetchResultsWithPolling(String tokens) {
@@ -255,6 +308,10 @@ public class JudgeService {
                             .queryParam("fields", "status_id,stdout,time,memory,stderr,status")
                             .build())
                     .retrieve()
+                    .onStatus(HttpStatusCode::isError, response ->
+                            response.bodyToMono(String.class)
+                                    .map(body -> new RuntimeException("Judge0 error: " + body))
+                    )
                     .bodyToMono(Judge0BatchResponse.class)
                     .block();
 
@@ -278,5 +335,16 @@ public class JudgeService {
         return resultPayload;
     }
 
-
+    private String mapJudge0StatusToText(int statusId) {
+        return switch (statusId) {
+            case 3 -> "Accepted";
+            case 4 -> "Wrong Answer";
+            case 5 -> "Time Limit Exceeded";
+            case 6 -> "Compilation Error";
+            case 7, 8, 9, 10, 11, 12 -> "Runtime Error";
+            case 13 -> "Internal Error";
+            case 14 -> "Exec Format Error";
+            default -> "Error";
+        };
+    }
 }

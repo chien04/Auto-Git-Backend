@@ -1,6 +1,6 @@
 package com.example.auto_git_be.service;
 
-import com.example.auto_git_be.utils.Constant;
+import com.example.auto_git_be.dto.assignment.AssignmentTaskCreateRequest;
 import org.kohsuke.github.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -150,30 +150,33 @@ public class GitHubService {
         return githubToken;
     }
 
-    public void createWorkflowFile(String repoFullName, String branchName, String assignmentCode) throws IOException {
-        String workflowContent = Constant.WORKFLOW_GITHUB_ACTION;
+    public void createMultipleFilesInRepo(String repoFullName, String branchName, List<AssignmentTaskCreateRequest> tasks) throws IOException {
+        GitHub gh = getGitHub();
+        GHRepository repo = gh.getRepository(repoFullName);
 
-        workflowContent = workflowContent
-                .replace("{{BACKEND_URL}}", backendUrl)
-                .replace("{{ASSIGNMENT_CODE}}", assignmentCode)
-                .replace("{{BACKEND_URL}}", backendUrl);
-        createFileInRepo(repoFullName, ".github/workflows/auto-grading.yml", workflowContent, branchName);
-    }
+        GHBranch branch = repo.getBranch(branchName);
+        String latestCommitSha = branch.getSHA1();
 
-    private void createFileInRepo(String repoFullName, String filePath, String content, String branchName) throws IOException {
-        try {
-            GitHub gh = getGitHub();
-            GHRepository repo = gh.getRepository(repoFullName);
+        GHTreeBuilder treeBuilder = repo.createTree().baseTree(latestCommitSha);
 
-            repo.createContent()
-                .branch(branchName)
-                .path(filePath)
-                .content(content)
-                .message("Add " + filePath)
-                .commit();
-        } catch (Exception e) {
-            throw e;
+        for (int i = 0; i < tasks.size(); i++) {
+            AssignmentTaskCreateRequest task = tasks.get(i);
+            int orderNo = task.getOrderNo() != null ? task.getOrderNo() : (i + 1);
+            String taskFileName = "task" + orderNo + ".cpp";
+
+            String taskContent = "\n#include <iostream>\nusing namespace std;\n\nint main() {\n    // Your code here\n    return 0;\n}\n";
+
+            treeBuilder.add(taskFileName, taskContent, false);
         }
+
+        GHTree newTree = treeBuilder.create();
+
+        GHCommit newCommit = repo.createCommit()
+                .message("Add all assignment tasks")
+                .tree(newTree.getSha())
+                .parent(latestCommitSha)
+                .create();
+        repo.getRef("heads/" + branchName).updateTo(newCommit.getSHA1());
     }
 
     public String pushStudentCode(String repoName, String branchName, String filePath, String sourceCode, String commitMessage) throws IOException {
@@ -199,5 +202,15 @@ public class GitHubService {
         }
     }
 
+    public void deleteFileInRepo(String repoFullName, String filePath, String branchName) throws IOException {
+        try {
+            GitHub gh = getGitHub();
+            GHRepository repo = gh.getRepository(repoFullName);
 
+            GHContent content = repo.getFileContent(filePath, branchName);
+            content.delete("Delete " + filePath, branchName);
+        } catch (GHFileNotFoundException e) {
+            // File doesn't exist, no need to delete
+        }
+    }
 }

@@ -16,13 +16,6 @@ import java.util.List;
 @Service
 public class AssignmentWorkspaceService {
 
-    @Value("${workspace.root.path:D:/Assignments}")
-    private String workspaceRootPath;
-
-    private String getAssignmentPath(String classCode, String assignmentCode) {
-        return workspaceRootPath + "/" + classCode + "-" + assignmentCode;
-    }
-
     private String sanitizeFileName(String name) {
         if (name == null) {
             return "unknown-student";
@@ -91,62 +84,6 @@ public class AssignmentWorkspaceService {
         }
     }
 
-    private void cloneRepository(String repoUrl, String targetPath, String token) throws IOException {
-        File targetDir = new File(targetPath);
-        if (targetDir.exists()) {
-            return;
-        }
-
-        // Convert HTTPS URL to include token
-        String authenticatedUrl = repoUrl;
-        if (token != null && !token.isEmpty()) {
-            authenticatedUrl = repoUrl.replace("https://", "https://" + token + "@");
-        }
-
-        try {
-            executeGitCommand(targetDir.getParent(), "git", "clone", authenticatedUrl, targetPath);
-        } catch (IOException e) {
-            throw e;
-        }
-
-        // Add students/ to .gitignore
-        addStudentsFolderToGitignore(targetPath);
-
-        // Checkout teacher branch
-        executeGitCommand(targetPath, "git", "checkout", "teacher");
-    }
-
-    private void addStudentsFolderToGitignore(String repoPath) throws IOException {
-        File gitignoreFile = new File(repoPath, ".gitignore");
-        String studentsEntry = "students/\n";
-
-        try {
-            String content = "";
-            if (gitignoreFile.exists()) {
-                content = new String(Files.readAllBytes(gitignoreFile.toPath()));
-            }
-
-            if (!content.contains("students/")) {
-                Files.write(
-                        gitignoreFile.toPath(),
-                        studentsEntry.getBytes(),
-                        java.nio.file.StandardOpenOption.CREATE,
-                        java.nio.file.StandardOpenOption.APPEND
-                );
-
-                // Auto-commit and push .gitignore
-                try {
-                    executeGitCommand(repoPath, "git", "add", ".gitignore");
-                    executeGitCommand(repoPath, "git", "commit", "-m", "chore: add students/ to .gitignore");
-                    executeGitCommand(repoPath, "git", "push", "origin", "teacher");
-                } catch (IOException e) {
-                    // Don't throw - .gitignore still added locally
-                }
-            }
-        } catch (Exception e) {
-        }
-    }
-
     private void createWorktree(String repoPath, String branchName, String studentName) throws IOException {
         String worktreePath = getStudentWorktreePath(repoPath, studentName);
 
@@ -157,31 +94,6 @@ public class AssignmentWorkspaceService {
 
         executeGitCommand(repoPath, "git", "fetch", "origin", branchName);
         executeGitCommand(repoPath, "git", "worktree", "add", worktreePath, branchName);
-    }
-
-    public String setupAssignmentWorkspace(Assignment assignment, List<StudentAssignment> studentAssignments, String token, String localPath) throws IOException {
-        if (localPath == null || localPath.isEmpty()) {
-            String classCode = assignment.getClassRoom().getClassCode();
-            String assignmentCode = assignment.getAssignmentCode();
-            localPath = getAssignmentPath(classCode, assignmentCode);
-        }
-
-        File assignmentDir = new File(localPath);
-
-        File gitDir = new File(assignmentDir, ".git");
-        if (!gitDir.exists()) {
-            cloneRepository(assignment.getRepoUrl(), localPath, token);
-        }
-
-        // Create worktrees for all students who joined
-        for (StudentAssignment sa : studentAssignments) {
-            if (sa.getBranchName() != null && !sa.getBranchName().isEmpty()) {
-                String studentName = sa.getStudent().getStudentName();
-                createWorktree(localPath, sa.getBranchName(), studentName);
-            }
-        }
-
-        return localPath;
     }
 
     public void syncAssignmentWorkspace(List<StudentAssignment> studentAssignments, String localPath) throws IOException {
@@ -214,73 +126,6 @@ public class AssignmentWorkspaceService {
 
             executeGitCommand(worktreePath, "git", "pull", "origin", sa.getBranchName());
         }
-    }
-
-    public void updateAssignmentWorkspaceAndCreateWorktree(Assignment assignment, List<StudentAssignment> studentAssignments, String localPath) {
-        if (localPath == null || localPath.isEmpty()) {
-            String classCode = assignment.getClassRoom().getClassCode();
-            String assignmentCode = assignment.getAssignmentCode();
-            localPath = getAssignmentPath(classCode, assignmentCode);
-        }
-
-        // Create worktrees for new students
-        for (StudentAssignment sa : studentAssignments) {
-            if (sa.getBranchName() == null || sa.getBranchName().isEmpty()) {
-                continue;
-            }
-
-            String studentName = sa.getStudent().getStudentName();
-            migrateLegacyStudentFolder(localPath, studentName);
-            String worktreePath = getStudentWorktreePath(localPath, studentName);
-
-            if (!new File(worktreePath).exists()) {
-                try {
-                    createWorktree(localPath, sa.getBranchName(), studentName);
-                } catch (IOException e) {
-                    throw new RuntimeException(
-                            "Create worktree failed for branch " + sa.getBranchName(),
-                            e
-                    );
-                }
-            }
-        }
-    }
-
-    public boolean workspaceExists(String classCode, String assignmentCode) {
-        String assignmentPath = getAssignmentPath(classCode, assignmentCode);
-        File gitDir = new File(assignmentPath, ".git");
-        return gitDir.exists();
-    }
-
-    public String getWorkspacePath(String classCode, String assignmentCode) {
-        return getAssignmentPath(classCode, assignmentCode);
-    }
-
-    public boolean isWorkspaceSetup(String localPath) {
-        if (localPath == null || localPath.isEmpty()) {
-            return false;
-        }
-
-        File workspaceDir = new File(localPath);
-
-        // Check if workspace folder exists
-        if (!workspaceDir.exists() || !workspaceDir.isDirectory()) {
-            return false;
-        }
-
-        // Check if it's a git repository
-        File gitDir = new File(workspaceDir, ".git");
-        if (!gitDir.exists()) {
-            return false;
-        }
-
-        // Check if students/ folder exists (indicating worktree setup)
-        File studentsDir = new File(workspaceDir, "students");
-        if (!studentsDir.exists() || !studentsDir.isDirectory()) {
-            return false;
-        }
-
-        return true;
     }
 
 }

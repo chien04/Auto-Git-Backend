@@ -18,44 +18,12 @@ public class TeacherAssignmentService {
 
     private final TeacherAssignmentRepository teacherAssignmentRepository;
 
-    @Transactional
-    public TeacherAssignment saveTeacherAssignment(User teacher, Assignment assignment, String localPath, String role) {
-        Optional<TeacherAssignment> existing = teacherAssignmentRepository.findByTeacherAndAssignment(teacher, assignment);
-        
-        if (existing.isPresent()) {
-            // Update existing
-            TeacherAssignment ta = existing.get();
-            if (localPath != null && !localPath.isEmpty()) {
-                ta.setLocalPath(localPath);
-            }
-            if (role != null && !role.isEmpty()) {
-                ta.setRole(role);
-            }
-            TeacherAssignment saved = teacherAssignmentRepository.save(ta);
-            return saved;
-        } else {
-            // Create new
-            TeacherAssignment ta = TeacherAssignment.builder()
-                    .teacher(teacher)
-                    .assignment(assignment)
-                    .localPath(localPath)
-                    .role(role != null ? role : "MAIN")
-                    .build();
-            TeacherAssignment saved = teacherAssignmentRepository.save(ta);
-            return saved;
-        }
-    }
-
     public Optional<TeacherAssignment> getTeacherAssignment(User teacher, Assignment assignment) {
         return teacherAssignmentRepository.findByTeacherAndAssignment(teacher, assignment);
     }
 
     public List<TeacherAssignment> getTeacherAssignment(Assignment assignment) {
         return teacherAssignmentRepository.findByAssignment(assignment);
-    }
-
-    public List<TeacherAssignment> getTeacherAssignments(User teacher) {
-        return teacherAssignmentRepository.findByTeacher(teacher);
     }
 
     public boolean hasAccess(User teacher, Assignment assignment) {
@@ -65,8 +33,4 @@ public class TeacherAssignmentService {
         return teacherAssignmentRepository.existsByTeacherAndAssignment(teacher, assignment);
     }
 
-    public String getLocalPath(User teacher, Assignment assignment) {
-        Optional<TeacherAssignment> ta = teacherAssignmentRepository.findByTeacherAndAssignment(teacher, assignment);
-        return ta.map(TeacherAssignment::getLocalPath).orElse(null);
-    }
 }

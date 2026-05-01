@@ -179,57 +179,6 @@ public class ClassController {
         return ResponseEntity.ok(response);
     }
 
-    @GetMapping("/all-members")
-    public ResponseEntity<List<Map<String, Object>>> getAllClassMembers(
-            @RequestHeader("Authorization") String authHeader) {
-        String token = authHeader.substring(7);
-        User currentUser = authService.getUserFromToken(token);
-
-        List<ClassRoom> userClasses = new java.util.ArrayList<>();
-
-        if ("TEACHER".equals(currentUser.getRole().name())) {
-            userClasses = classRoomService.getTeacherClasses(currentUser);
-        } else {
-            List<Student> enrollments = classRoomService.getStudentEnrollments(currentUser);
-            for (Student enrollment : enrollments) {
-                userClasses.add(enrollment.getClassRoom());
-            }
-        }
-
-        List<Map<String, Object>> allMembers = new java.util.ArrayList<>();
-
-        for (ClassRoom classroom : userClasses) {
-            User teacher = classroom.getTeacher();
-            if (!Objects.equals(teacher.getId(), currentUser.getId())) {
-                Map<String, Object> teacherInfo = new HashMap<>();
-                teacherInfo.put("userId", teacher.getId());
-                teacherInfo.put("userName", teacher.getName());
-                teacherInfo.put("userEmail", teacher.getEmail());
-                teacherInfo.put("role", "TEACHER");
-                teacherInfo.put("classId", classroom.getId());
-                teacherInfo.put("className", classroom.getName());
-                allMembers.add(teacherInfo);
-            }
-
-            List<Student> students = classRoomService.getStudentsInClass(classroom.getClassCode());
-            for (Student student : students) {
-                User studentUser = student.getUser();
-                if (!Objects.equals(studentUser.getId(), currentUser.getId())) {
-                    Map<String, Object> studentInfo = new HashMap<>();
-                    studentInfo.put("userId", studentUser.getId());
-                    studentInfo.put("userName", studentUser.getName());
-                    studentInfo.put("userEmail", studentUser.getEmail());
-                    studentInfo.put("role", "STUDENT");
-                    studentInfo.put("classId", classroom.getId());
-                    studentInfo.put("className", classroom.getName());
-                    allMembers.add(studentInfo);
-                }
-            }
-        }
-
-        return ResponseEntity.ok(allMembers);
-    }
-
     @GetMapping("/chat/classes-with-messages")
     public ResponseEntity<List<Map<String, Object>>> getClassesWithLastMessages(
             @RequestHeader("Authorization") String authHeader) {

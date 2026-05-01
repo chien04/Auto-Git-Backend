@@ -307,99 +307,6 @@ public class AssignmentController {
         ));
     }
 
-    @GetMapping("/{assignmentCode}/workspace/path")
-    public ResponseEntity<Map<String, Object>> getAssignmentWorkspacePath(
-            @PathVariable String assignmentCode,
-            @RequestHeader("Authorization") String authHeader) {
-        String token = authHeader.substring(7);
-        User teacher = authService.getUserFromToken(token);
-
-        Assignment assignment = assignmentService.getAssignmentByCode(assignmentCode);
-        if (assignment == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Assignment not found"));
-        }
-
-        // Verify teacher owns this assignment's class
-        if (!assignment.getClassRoom().getTeacher().getId().equals(teacher.getId())) {
-            return ResponseEntity.status(403).body(Map.of("error", "Not authorized"));
-        }
-
-        String classCode = assignment.getClassRoom().getClassCode();
-        String workspacePath = assignmentWorkspaceService.getWorkspacePath(classCode, assignmentCode);
-        boolean exists = assignmentWorkspaceService.workspaceExists(classCode, assignmentCode);
-
-        return ResponseEntity.ok(Map.of(
-                "workspacePath", workspacePath,
-                "exists", exists
-        ));
-    }
-
-
-    @PostMapping("/{assignmentCode}/teacher/localPath")
-    public ResponseEntity<Map<String, Object>> saveTeacherLocalPath(
-            @PathVariable String assignmentCode,
-            @RequestBody Map<String, String> request,
-            @RequestHeader("Authorization") String authHeader) {
-        String token = authHeader.substring(7);
-        User teacher = authService.getUserFromToken(token);
-
-        Assignment assignment = assignmentService.getAssignmentByCode(assignmentCode);
-        if (assignment == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Assignment not found"));
-        }
-
-        String localPath = request.get("localPath");
-        if (localPath == null || localPath.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Local path is required"));
-        }
-
-        // Check if teacher has access
-        if (!teacherAssignmentService.hasAccess(teacher, assignment)) {
-            return ResponseEntity.status(403).body(Map.of("error", "Not authorized"));
-        }
-
-        // Determine role
-        String role = assignment.getClassRoom().getTeacher().getId().equals(teacher.getId()) ? "MAIN" : "SUB";
-
-        TeacherAssignment ta = teacherAssignmentService.saveTeacherAssignment(teacher, assignment, localPath, role);
-
-        return ResponseEntity.ok(Map.of(
-                "message", "Local path saved successfully",
-                "localPath", ta.getLocalPath(),
-                "role", ta.getRole()
-        ));
-    }
-
-    @GetMapping("/{assignmentCode}/teacher/localPath")
-    public ResponseEntity<Map<String, Object>> getTeacherLocalPath(
-            @PathVariable String assignmentCode,
-            @RequestHeader("Authorization") String authHeader) {
-        String token = authHeader.substring(7);
-        User teacher = authService.getUserFromToken(token);
-
-        Assignment assignment = assignmentService.getAssignmentByCode(assignmentCode);
-        if (assignment == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Assignment not found"));
-        }
-
-        if (!teacherAssignmentService.hasAccess(teacher, assignment)) {
-            return ResponseEntity.status(403).body(Map.of("error", "Not authorized"));
-        }
-
-        String localPath = teacherAssignmentService.getLocalPath(teacher, assignment);
-        if (localPath == null) {
-            return ResponseEntity.ok(Map.of(
-                    "localPath", "",
-                    "exists", false
-            ));
-        }
-
-        return ResponseEntity.ok(Map.of(
-                "localPath", localPath,
-                "exists", true
-        ));
-    }
-
     @GetMapping("/{assignmentCode}/submissions")
     public ResponseEntity<?> getAssignmentSubmissions(
             @PathVariable String assignmentCode,
@@ -510,15 +417,5 @@ public class AssignmentController {
         User user = authService.getUserFromToken(token);
         CommentResponse response = commentService.resolveComment(commentId, user);
         return ResponseEntity.ok(response);
-    }
-
-    @GetMapping("tasks/result/{assignmentCode}")
-    public ResponseEntity<?> getTaskResult(
-            @PathVariable String assignmentCode,
-            @RequestHeader("Authorization")  String authHeader
-    ) {
-        String token = authHeader.substring(7);
-        User user = authService.getUserFromToken(token);
-        return ResponseEntity.ok(assignmentService.getTasks(user, assignmentCode));
     }
 }

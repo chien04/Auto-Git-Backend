@@ -10,6 +10,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class SubmitResponse {
+    private Double time;
+    private int memory;
+    private String errorMessage;
     private double score;
     private int passedTestCases;
     private int totalTestCases;
