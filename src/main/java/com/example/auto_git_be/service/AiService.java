@@ -19,10 +19,12 @@ import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.data.segment.TextSegment;
+import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.chat.StreamingChatLanguageModel;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
 import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.model.output.Response;
 import dev.langchain4j.service.TokenStream;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import lombok.RequiredArgsConstructor;
@@ -42,7 +44,8 @@ import java.util.*;
 public class AiService {
     private final EmbeddingModel embeddingModel;
     private final EmbeddingStore<TextSegment> embeddingStore;
-    private final StreamingChatLanguageModel chatModel;
+    private final StreamingChatLanguageModel streamingChatLanguageModel;
+    private final ChatLanguageModel chatLanguageModel;
     private final SimpMessagingTemplate template;
     private final MessageService messageService;
     private final FileCacheService fileCacheService;
@@ -59,7 +62,7 @@ public class AiService {
 
         chatHistoryCacheService.pushMessage(userId, "user", aiChatRequest.getMessage());
 
-        chatModel.chat(messages, createStreamingHandler(userId));
+        streamingChatLanguageModel.chat(messages, createStreamingHandler(userId));
     }
 
     public void generateTeacherStreamingResponse(Long userId, AiChatRequest aiChatRequest) throws JsonProcessingException {
@@ -234,43 +237,103 @@ public class AiService {
         for (StudentAssignmentDTO sa : request.getStudentAssignments()) {
             String studentName = sa.getStudentName();
 
+            List<Map<String, String>> filesBatch = new ArrayList<>();
+
             for (FileDTO f : sa.getFiles()) {
                 String taskOrderNo = String.valueOf(f.getTaskOrderNo());
                 String filename = f.getFileName();
                 String content = f.getFileContent();
-                String newHash = f.getHashcode();
 
                 if (content == null || content.trim().isEmpty()) {
                     continue;
                 }
 
-                if(fileCacheService.isIdentical(userId, assignmentCode, studentName, taskOrderNo, newHash)) {
+                if (fileCacheService.isIdentical(userId, assignmentCode, studentName, taskOrderNo, f.getHashcode())) {
                     continue;
                 }
 
-                String uniqueString = String.format("%d-%s-%s-%s", userId, assignmentCode, studentName, taskOrderNo);
-                String vectorId = UUID.nameUUIDFromBytes(uniqueString.getBytes()).toString();
+                Map<String, String> fileData = new HashMap<>();
+                fileData.put("file_name", filename);
+                fileData.put("content", content);
+
+                filesBatch.add(fileData);
+            }
+
+            if (filesBatch.isEmpty()) {
+                continue;
+            }
+
+            String llmJsonResponse = "[]";
+            try {
+                String inputJson = objectMapper.writeValueAsString(filesBatch);
+
+                String systemPrompt = Constant.SYSTEM_PROMPT_SUMMARY;
+
+                String userPrompt = "Dữ liệu các file:\n" + inputJson;
+
+                log.info("[AI] Đang gọi LLM tóm tắt {} file cho sinh viên: {}", filesBatch.size(), studentName);
+
+                ChatResponse response = chatLanguageModel.chat(
+                        SystemMessage.from(systemPrompt),
+                        UserMessage.from(userPrompt)
+                );
+
+                String rawText = response.aiMessage().text();
+
+                int startIndex = rawText.indexOf('[');
+                int endIndex = rawText.lastIndexOf(']');
+
+                if (startIndex != -1 && endIndex != -1 && endIndex > startIndex) {
+                    llmJsonResponse = rawText.substring(startIndex, endIndex + 1);
+                } else {
+                    llmJsonResponse = rawText;
+                }
+
+            } catch (Exception e) {
+                log.error("[AI] Lỗi khi gọi LLM tóm tắt file cho sinh viên {}", studentName, e);
+            }
+
+            Map<String, String> summaryMap = new HashMap<>();
+            try {
+                JsonNode summariesNode = objectMapper.readTree(llmJsonResponse);
+                if (summariesNode.isArray()) {
+                    for (JsonNode node : summariesNode) {
+                        if (node.has("file_name") && node.has("summary")) {
+                            summaryMap.put(node.get("file_name").asText(), node.get("summary").asText());
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.error("[AI] Lỗi parse JSON từ LLM", e);
+            }
+
+            for (FileDTO f : sa.getFiles()) {
+                String filename = f.getFileName();
+                String taskOrderNo = String.valueOf(f.getTaskOrderNo());
+
+                String textToEmbed = summaryMap.getOrDefault(filename, f.getFileContent());
+
+                String vectorUniqueStr = String.format("%d-%s-%s-%s", userId, assignmentCode, studentName, taskOrderNo);
+                String vectorId = UUID.nameUUIDFromBytes(vectorUniqueStr.getBytes()).toString();
 
                 Metadata metadata = new Metadata();
                 metadata.put("id", vectorId);
                 metadata.put("embedded_by_id", userId.toString());
                 metadata.put("assignment_code", assignmentCode);
                 metadata.put("student_name", studentName);
-
                 metadata.put("task_order_no", taskOrderNo);
                 metadata.put("file_name", filename);
-                metadata.put("file_hash", newHash);
+                metadata.put("file_hash", f.getHashcode());
+                metadata.put("raw_source_code", f.getFileContent());
 
-                TextSegment segment = TextSegment.from(content, metadata);
-                segmentsToEmbed.add(segment);
-
-                fileCacheService.updateCache(userId, assignmentCode, studentName, taskOrderNo, newHash);
+                segmentsToEmbed.add(TextSegment.from(textToEmbed, metadata));
+                fileCacheService.updateCache(userId, assignmentCode, studentName, taskOrderNo, f.getHashcode());
             }
         }
 
         if (!segmentsToEmbed.isEmpty()) {
             log.info("EmbeddingModel class: {}", embeddingModel.getClass().getSimpleName());
-            log.info("[AI] Bắt đầu gọi API Embedding cho {} file bị thay đổi...", segmentsToEmbed.size());
+            log.info("[AI] Bắt đầu gọi API Embedding cho {} file bị thay đổi (đã tóm tắt)...", segmentsToEmbed.size());
             var embeddings = embeddingModel.embedAll(segmentsToEmbed).content();
 
             List<Embedding> validEmbeddings = new ArrayList<>();

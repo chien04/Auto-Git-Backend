@@ -7,10 +7,6 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 
-/**
- * Stores teacher-specific information for assignments
- * Allows multiple teachers to work on same assignment with different local paths
- */
 @Entity
 @Table(name = "teacher_assignments", 
        uniqueConstraints = @UniqueConstraint(columnNames = {"teacher_id", "assignment_id"}))

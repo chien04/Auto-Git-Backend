@@ -27,52 +27,136 @@ public class VectorQueryTool {
     private static final String COLLECTION_NAME = "ai_chat";
 
     @Tool("""
-            Tìm kiếm ngữ nghĩa và đọc MÃ NGUỒN (source code) của sinh viên từ Vector DB.
-            DÙNG KHI: xem chi tiết code, phân tích thuật toán, tìm lỗi logic, kiểm tra đạo văn.
-            KHÔNG DÙNG ĐỂ: lấy điểm số, thống kê, danh sách nộp bài — dùng executeQuery thay thế.
+            Perform semantic search over student source code summaries and algorithm descriptions stored in the Vector DB.
             
-            HƯỚNG DẪN KIỂM TRA ĐẠO VĂN / COPY CODE:
-            Khi người dùng hỏi "có ai copy code không", "kiểm tra đạo văn", "so sánh code giữa các sinh viên":
-            1. Gọi tool này NHIỀU LẦN, mỗi lần với query là đoạn code đặc trưng của từng sinh viên.
-            2. Lần đầu: dùng query chung như 'solution implementation' với studentNames='ALL' để lấy mẫu code của tất cả sinh viên.
-            3. So sánh cấu trúc, biến, logic giữa các kết quả trả về.
-            4. KHÔNG dùng query mô tả bài toán (VD: 'find largest number') vì sẽ tìm theo ngữ nghĩa bài toán thay vì tìm code giống nhau.
-            SAU KHI NHẬN KẾT QUẢ TỪ TOOL:
-                    - Nếu detailLevel='summary': KHÔNG được tự ý in lại code trong câu trả lời, chỉ phân tích và nhận xét.
-                    - Nếu detailLevel='full': Được phép hiển thị những đoạn code liên quan không phải trả về toàn bộ source trừ khi người dùng muốn xem full.
-    """)
+            USE THIS TOOL FOR:
+            - Understanding student solution logic
+            - Algorithm analysis
+            - Finding logical mistakes
+            - Comparing coding approaches
+            - Detecting suspiciously similar solutions
+            - Reviewing implementation strategies
+            
+            DO NOT USE THIS TOOL FOR:
+            - Scores
+            - Submission statistics
+            - Student lists
+            - Submission status reports
+            
+            Use executeQuery instead for database statistics.
+            
+            IMPORTANT:
+            The Vector DB now stores NATURAL LANGUAGE DESCRIPTIONS of source code,
+            NOT raw source code itself.
+            
+            Each embedding represents:
+            - Algorithm explanation
+            - Execution flow summary
+            - Important variables and data structures
+            - Logic description
+            - Solution behavior
+            - High-level implementation details
+            
+            ════════════════════════════════════════
+            PLAGIARISM / SIMILAR SOLUTION DETECTION
+            ════════════════════════════════════════
+            When the user asks:
+            - "who copied code?"
+            - "check plagiarism"
+            - "compare student solutions"
+            
+            Follow this strategy:
+            1. Search multiple times using algorithmic or implementation-related descriptions.
+            2. First, use broad queries such as:
+               - "dynamic programming solution"
+               - "binary search implementation"
+               - "graph traversal approach"
+               - "greedy algorithm logic"
+            
+            3. Compare:
+               - Algorithm structure
+               - Execution flow
+               - Problem-solving strategy
+               - Data structure usage
+               - Similar implementation descriptions
+            
+            4. Detect suspiciously similar logic patterns between students.
+            
+            IMPORTANT:
+            Since embeddings contain NATURAL LANGUAGE SUMMARIES instead of raw source code:
+            - DO NOT search using exact code snippets.
+            - DO NOT rely on variable names.
+            - Focus on implementation behavior and algorithmic similarity.
+            - Compare semantic meaning and execution logic instead of literal code similarity.
+            """)
     public String searchStudentCode(
-            @P("""
-            Mô tả ngữ nghĩa cần tìm. KHÔNG ĐƯỢC ĐỂ TRỐNG HOẶC NULL.
-            Vì Vector DB chứa mã nguồn (không có bình luận tiếng Việt), nếu người dùng hỏi các khái niệm lập trình (như 'đệ quy', 'vòng lặp'), bạn KHÔNG ĐƯỢC truyền nguyên chữ tiếng Việt vào.
-            Hãy TỰ ĐỘNG DỊCH khái niệm đó thành cấu trúc code hoặc tiếng Anh chuyên ngành trước khi truyền vào.
-            VD:
-            - Hỏi 'đệ quy' -> Truyền: 'recursive function calling itself'
-            - Hỏi 'vòng lặp vô hạn' -> Truyền: 'while(true) infinite loop'
-            hoặc paste một đoạn code mẫu để tìm code tương tự.
-            """) String semanticQuery,
 
             @P("""
-            Tên sinh viên cần xem code.
-            - Nếu xem 1 người: Ghi đúng tên (VD: 'Nguyễn Văn A').
-            - Nếu so sánh NHIỀU người: Ghi các tên cách nhau bằng dấu phẩy (VD: 'Nguyễn Văn A, Trần Văn B').
-            - Nếu quét cả lớp: Ghi 'ALL'.
-            (bắt buộc dùng ALL khi kiểm tra đạo văn hoặc so sánh cách code).
-            """) String studentNames,
+                    Semantic description to search for.
+                    MUST NOT be empty or null.
+                    
+                    Since the Vector DB stores English natural-language
+                    descriptions of source code, always convert programming
+                    concepts into technical English descriptions before searching.
+                    
+                    Examples:
+                    - "đệ quy"
+                      → "recursive function calling itself"
+                    
+                    - "vòng lặp vô hạn"
+                      → "infinite loop using while(true)"
+                    
+                    - "quy hoạch động"
+                      → "dynamic programming state transition solution"
+                    
+                    - "tham lam"
+                      → "greedy algorithm choosing local optimum"
+                    
+                    Focus on:
+                    - algorithm behavior
+                    - execution flow
+                    - implementation strategy
+                    - data structure usage
+                    - logical patterns
+                    """)
+            String semanticQuery,
 
             @P("""
-            Số thứ tự bài (task) cần tìm, tương ứng với order_no trong DB.
-            VD: '1' để tìm trong task1, '2' để tìm trong task2.
-            Ghi 'ALL' nếu muốn tìm trên mọi task/file.
-            """) String taskOrderNo,
+                    Student names to analyze.
+                    
+                    Rules:
+                    - Single student:
+                      "Nguyen Van A"
+                    
+                    - Multiple students:
+                      "Nguyen Van A, Tran Van B"
+                    
+                    - Entire class:
+                      "ALL"
+                    
+                    IMPORTANT:
+                    Use "ALL" for:
+                    - plagiarism detection
+                    - comparing solution strategies
+                    - finding similar implementations
+                    """)
+            String studentNames,
 
             @P("""
-            Mức độ chi tiết cần trả về:
-            - 'summary': Chỉ trả tên sinh viên, file, score. DÙNG KHI: so sánh, kiểm tra đạo văn, thống kê.
-            - 'full': Trả đầy đủ cả code. DÙNG KHI: người dùng yêu cầu xem code cụ thể, phân tích lỗi.
-            """) String detailLevel,
+                    Task order number corresponding to order_no in the database.
+                    
+                    Examples:
+                    - "1" → task1
+                    - "2" → task2
+                    - "ALL" → search across all tasks
+                    """)
+            String taskOrderNo,
 
-            @P("Mã bài tập hiện tại (bắt buộc)") String assignmentCode
+            @P("""
+                    Current assignment code.
+                    REQUIRED.
+                    """)
+            String assignmentCode
     ) {
         log.info("[Vector Tool] AI đang tìm kiếm: query='{}', student='{}', file='{}'", semanticQuery, studentNames, taskOrderNo);
 
@@ -82,6 +166,7 @@ public class VectorQueryTool {
             for (float v : vectorArray) vector.add(v);
 
             int limit = 5;
+            float thresholdScore = 0;
             boolean isAllStudents = studentNames == null || studentNames.equalsIgnoreCase("ALL");
             List<String> namesList = new ArrayList<>();
 
@@ -91,8 +176,10 @@ public class VectorQueryTool {
                         .filter(name -> !name.isEmpty())
                         .collect(Collectors.toList());
                 if (namesList.size() > 1) limit = 10;
+                thresholdScore = 0f;
             } else {
                 limit = 100;
+                thresholdScore = 0.3f;
             }
             Filter qdrantFilter = buildFilter(assignmentCode, namesList, taskOrderNo);
 
@@ -100,7 +187,7 @@ public class VectorQueryTool {
                     .setCollectionName(COLLECTION_NAME)
                     .addAllVector(vector)
                     .setLimit(limit)
-                    .setScoreThreshold(0.3f)
+                    .setScoreThreshold(thresholdScore)
                     .setWithPayload(WithPayloadSelector.newBuilder().setEnable(true).build());
 
             searchBuilder.setFilter(qdrantFilter);
@@ -112,28 +199,18 @@ public class VectorQueryTool {
             return points.stream()
                     .map(point -> {
                         Map<String, JsonWithInt.Value> payload = point.getPayloadMap();
-                        String sName    = getPayloadString(payload, "student_name");
-                        String fName    = getPayloadString(payload, "file_name");
-                        String orderNo  = getPayloadString(payload, "task_order_no");
-                        String code     = getPayloadString(payload, "text_segment");
-
-                        String codeSection;
-                        if ("full".equalsIgnoreCase(detailLevel)) {
-                            codeSection = String.format("\nMã nguồn:\n```\n%s\n```", code);
-                        } else {
-                            String preview = code.length() > 100
-                                    ? code.substring(0, 100) + "..."
-                                    : code;
-                            codeSection = String.format("\nPreview: %s", preview);
-                        }
+                        String sName = getPayloadString(payload, "student_name");
+                        String fName = getPayloadString(payload, "file_name");
+                        String orderNo = getPayloadString(payload, "task_order_no");
+                        String code = getPayloadString(payload, "raw_source_code");
 
                         return String.format(
-                                "--- BẮT ĐẦU KẾT QUẢ ---\n" +
-                                        "Sinh viên: %s\n" +
+                                "--- BEGIN RESULT ---\n" +
+                                        "Student: %s\n" +
                                         "File: %s (Task %s)\n" +
-                                        "Mã nguồn:\n```\n%s\n```\n" +
-                                        "--- KẾT THÚC KẾT QUẢ ---",
-                                sName, fName, orderNo, codeSection
+                                        "Source code:\n```\n%s\n```\n" +
+                                        "--- END RESULT ---",
+                                sName, fName, orderNo, code
                         );
                     })
                     .collect(Collectors.joining("\n\n"));

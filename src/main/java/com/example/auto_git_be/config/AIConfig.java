@@ -3,9 +3,11 @@ package com.example.auto_git_be.config;
 import com.example.auto_git_be.tool.DatabaseQueryTool;
 import com.example.auto_git_be.tool.VectorQueryTool;
 import dev.langchain4j.data.segment.TextSegment;
+import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.chat.StreamingChatLanguageModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.ollama.OllamaEmbeddingModel;
+import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import dev.langchain4j.service.AiServices;
@@ -43,6 +45,17 @@ public class AIConfig {
         return OpenAiStreamingChatModel.builder()
                 .apiKey(openAiKey)
                 .modelName("gpt-4o-mini")
+                .temperature(0.0)
+                .build();
+    }
+
+    @Bean
+    public ChatLanguageModel blockingChatModel() {
+        return OpenAiChatModel.builder()
+                .apiKey(openAiKey)
+                .modelName("gpt-4o-mini")
+                .temperature(0.0)
+                .responseFormat("json_object")
                 .build();
     }
 

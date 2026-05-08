@@ -1,6 +1,6 @@
 package com.example.auto_git_be.service;
 
-import com.example.auto_git_be.dto.testcase.TaskZipItem;
+import com.example.auto_git_be.dto.testcase.TaskZipUploadItem;
 import com.example.auto_git_be.dto.testcase.TestCaseTemp;
 import com.example.auto_git_be.entity.Assignment;
 import com.example.auto_git_be.entity.AssignmentTask;
@@ -17,7 +17,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.util.Base64;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -38,7 +37,7 @@ public class TestCaseService {
     Pattern outputPattern = Pattern.compile("output(\\d+)\\.txt");
 
     @Transactional
-    public Map<String, Object> uploadTaskTestCasesZips(String assignmentCode, List<TaskZipItem> tasks) {
+    public Map<String, Object> uploadTaskTestCasesZips(String assignmentCode, List<TaskZipUploadItem> tasks) {
         Assignment assignment = assignmentRepository.findByAssignmentCode(assignmentCode)
                 .orElseThrow(() -> new RuntimeException("Assignment not found: " + assignmentCode));
 
@@ -49,21 +48,18 @@ public class TestCaseService {
         List<Map<String, Object>> uploaded = new ArrayList<>();
 
         for (int index = 0; index < tasks.size(); index++) {
-            TaskZipItem item = tasks.get(index);
-            if (item == null || item.getFileContent() == null || item.getFileContent().isBlank()) {
+            TaskZipUploadItem item = tasks.get(index);
+            if (item == null || item.getFileContent() == null || item.getFileContent().length == 0) {
                 continue;
             }
 
             int taskOrderNo = index + 1;
-            byte[] zipBytes = Base64.getDecoder().decode(item.getFileContent());
+            byte[] zipBytes = item.getFileContent();
             validateTaskZipStructure(zipBytes, taskOrderNo, item.getFileName());
 
             String taskName = (item.getTaskName() == null || item.getTaskName().isBlank())
                 ? ("Task " + taskOrderNo)
                     : item.getTaskName();
-
-            String objectKey = buildTaskObjectKey(assignmentCode, taskName, taskOrderNo);
-            minioService.uploadFile(objectKey, zipBytes, "application/zip");
 
             AssignmentTask assignmentTask = assignmentTaskRepository
                     .findByAssignmentAndOrderNo(assignment, taskOrderNo)

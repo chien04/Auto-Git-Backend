@@ -8,8 +8,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Component
@@ -20,39 +22,116 @@ public class DatabaseQueryTool {
     private final ObjectMapper objectMapper;
 
     @Tool("""
-    Truy vấn THỐNG KÊ và THÔNG TIN bài tập từ database.
-    DÙNG KHI: hỏi về điểm số, trạng thái nộp bài, số lượng sinh viên, thống kê lỗi, danh sách task.
-    KHÔNG DÙNG ĐỂ: đọc nội dung mã nguồn (source_code) — dùng searchStudentCode thay thế.
-    LƯU Ý: Một sinh viên có thể làm nhiều task. Mỗi task có order_no (số thứ tự: 1, 2, 3...).
-    """)
+            Query assignment statistics and submission information from the database.
+            
+            USE THIS TOOL FOR:
+            - Scores
+            - Submission status
+            - Student statistics
+            - Error statistics
+            - Task lists
+            - Performance reports
+            
+            DO NOT USE THIS TOOL FOR:
+            - Reading source code or source_code content
+            - Code analysis
+            - Algorithm explanation
+            
+            Use searchStudentCode instead for source code analysis.
+            
+            IMPORTANT:
+            - One student may submit multiple tasks.
+            - Each task has an order_no value representing task order:
+              1 = task1
+              2 = task2
+              3 = task3
+              etc.
+            """)
     public String executeQuery(
-            @P("""
-            DANH SÁCH CỘT CẦN LẤY (phân cách bằng dấu phẩy).
-            LUÔN bao gồm: 'assignment_title', 'student_name'.
-            CÁC CỘT HỢP LỆ: assignment_title, student_name, task_name, order_no,
-              score, pass, total, status, error_message, execution_time, memory_used, language.
-            TUYỆT ĐỐI KHÔNG chọn: student_id, assignment_code, source_code.
-            """) String selectColumns,
 
             @P("""
-            Điều kiện WHERE (KHÔNG bắt đầu bằng 'WHERE').
-            Tìm theo task: dùng order_no. VD: order_no = 1 (tức task1), order_no = 2 (tức task2).
-            Tìm theo tên SV: REPLACE(LOWER(student_name), ' ', '') LIKE '%nguyenvana%'.
-            Tìm theo trạng thái: status = 'Compilation Error'.
-            Để trống nếu không cần lọc thêm.
-            """) String conditions,
+                    LIST OF COLUMNS TO SELECT (comma separated).
+                    
+                    ALWAYS include:
+                    - assignment_title
+                    - student_name
+                    
+                    VALID COLUMNS:
+                    - assignment_title
+                    - student_name
+                    - task_name
+                    - order_no
+                    - score
+                    - pass
+                    - total
+                    - status
+                    - error_message
+                    - execution_time
+                    - memory_used
+                    - language
+                    
+                    NEVER SELECT:
+                    - student_id
+                    - assignment_code
+                    - source_code
+                    """)
+            String selectColumns,
 
             @P("""
-            Mệnh đề GROUP BY, ORDER BY, LIMIT (nếu cần).
-            LƯU Ý CỰC KỲ QUAN TRỌNG VỚI GROUP BY: Trong SQL, MỌI CỘT liệt kê ở phần SELECT bắt buộc phải có mặt trong mệnh đề GROUP BY (nếu không dùng hàm tổng hợp như COUNT, SUM). 
-            Ví dụ đúng: Nếu SELECT là 'assignment_title, student_name, status', thì phải là 'GROUP BY assignment_title, student_name, status'.
-            VD khác: GROUP BY student_name ORDER BY student_name ASC LIMIT 10.
-            Để trống nếu không cần.
+                    WHERE conditions (WITHOUT the 'WHERE' keyword).
+                    
+                    Examples:
+                    - order_no = 1
+                    - status = 'Compilation Error'
+                    - language = 'Java'
+                    
+                    Use order_no to filter specific tasks:
+                    - order_no = 1 → task1
+                    - order_no = 2 → task2
+                    
+                    Leave empty if no additional filtering is needed.
+                    """)
+            String conditions,
 
-            """) String groupingAndSorting,
+            @P("""
+                    GROUP BY, ORDER BY, and LIMIT clause if needed.
+                    
+                    VERY IMPORTANT GROUP BY RULE:
+                    In SQL, EVERY non-aggregate column in SELECT
+                    MUST also appear in GROUP BY.
+                    
+                    Correct example:
+                    SELECT:
+                      assignment_title, student_name, status
+                    
+                    GROUP BY:
+                      assignment_title, student_name, status
+                    
+                    Incorrect:
+                      GROUP BY student_name
+                      (missing assignment_title and status)
+                    
+                    Another example:
+                    GROUP BY assignment_title, student_name
+                    ORDER BY student_name ASC
+                    LIMIT 10
+                    
+                    Leave empty if not needed.
+                    """)
+            String groupingAndSorting,
 
-            @P("Mã bài tập hiện tại (bắt buộc, dùng để filter nội bộ)") String assignmentCode
+            @P("""
+                    Current assignment code.
+                    REQUIRED.
+                    Used internally for filtering.
+                    """)
+            String assignmentCode
     ) {
+
+        if (groupingAndSorting != null && groupingAndSorting.toUpperCase().contains("GROUP BY")) {
+            groupingAndSorting = fixGroupBy(selectColumns, groupingAndSorting);
+        }
+
         StringBuilder sqlBuilder = new StringBuilder("SELECT ");
         sqlBuilder.append(selectColumns != null && !selectColumns.trim().isEmpty() ? selectColumns : "*");
         sqlBuilder.append(" FROM v_assignment_analytics WHERE assignment_code = ?");
@@ -80,7 +159,22 @@ public class DatabaseQueryTool {
             return objectMapper.writeValueAsString(results);
         } catch (Exception e) {
             log.error("Lỗi khi truy vấn DB Tool: {}", e.getMessage());
-            return "Lỗi thực thi dữ liệu: Vui lòng kiểm tra lại cấu trúc câu SQL do bạn tạo ra.";
+            return "Lỗi SQL: " + e.getMessage()
+                    + "SQL đã chạy: [" + finalSql + "]";
         }
+    }
+
+    private String fixGroupBy(String selectColumns, String groupingAndSorting) {
+        List<String> selectCols = Arrays.stream(selectColumns.split(","))
+                .map(String::trim)
+                .filter(col -> !col.toUpperCase().matches(".*(COUNT|SUM|AVG|MAX|MIN)\\s*\\(.*"))
+                .collect(Collectors.toList());
+
+        String correctGroupBy = "GROUP BY " + String.join(", ", selectCols);
+        String remainder = groupingAndSorting
+                .replaceAll("(?i)GROUP\\s+BY\\s+[\\w\\s,]+", "")
+                .trim();
+
+        return (correctGroupBy + " " + remainder).trim();
     }
 }
