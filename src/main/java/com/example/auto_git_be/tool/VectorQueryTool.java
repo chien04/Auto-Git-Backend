@@ -27,15 +27,13 @@ public class VectorQueryTool {
     private static final String COLLECTION_NAME = "ai_chat";
 
     @Tool("""
-            Perform semantic search over student source code summaries and algorithm descriptions stored in the Vector DB.
+            Perform semantic search over algorithm descriptions and implementation summaries stored in the Vector DB.
             
             USE THIS TOOL FOR:
-            - Understanding student solution logic
-            - Algorithm analysis
-            - Finding logical mistakes
-            - Comparing coding approaches
-            - Detecting suspiciously similar solutions
-            - Reviewing implementation strategies
+            - Finding related solution logic
+            - Comparing implementation approaches
+            - Detecting structurally similar algorithms
+            - Understanding how students solved a problem
             
             DO NOT USE THIS TOOL FOR:
             - Scores
@@ -43,51 +41,48 @@ public class VectorQueryTool {
             - Student lists
             - Submission status reports
             
-            Use executeQuery instead for database statistics.
+            The Vector DB stores NATURAL LANGUAGE DESCRIPTIONS of source code,
+            NOT raw source code.
+            
+            Each embedding may contain:
+            - Algorithm summaries
+            - Execution flow descriptions
+            - Data structure usage
+            - High-level implementation behavior
             
             IMPORTANT:
-            The Vector DB now stores NATURAL LANGUAGE DESCRIPTIONS of source code,
-            NOT raw source code itself.
+            This tool ONLY retrieves semantically related implementation descriptions.
             
-            Each embedding represents:
-            - Algorithm explanation
-            - Execution flow summary
-            - Important variables and data structures
-            - Logic description
-            - Solution behavior
-            - High-level implementation details
+            The assistant MUST decide:
+            - how much detail to show
+            - whether detailed analysis is necessary
+            - whether code snippets should be shown
+            
+            Do NOT automatically generate:
+            - long comparisons
+            - detailed reports
+            - full algorithm explanations
+            - source code output
             
             ════════════════════════════════════════
-            PLAGIARISM / SIMILAR SOLUTION DETECTION
+            PLAGIARISM DETECTION RULES
             ════════════════════════════════════════
-            When the user asks:
-            - "who copied code?"
-            - "check plagiarism"
-            - "compare student solutions"
             
-            Follow this strategy:
-            1. Search multiple times using algorithmic or implementation-related descriptions.
-            2. First, use broad queries such as:
-               - "dynamic programming solution"
-               - "binary search implementation"
-               - "graph traversal approach"
-               - "greedy algorithm logic"
+            Focus ONLY on:
+            - algorithm structure
+            - execution flow
+            - implementation strategy
+            - control flow similarity
             
-            3. Compare:
-               - Algorithm structure
-               - Execution flow
-               - Problem-solving strategy
-               - Data structure usage
-               - Similar implementation descriptions
+            Ignore:
+            - same problem requirements
+            - same functionality
+            - similar outputs
+            - variable names
+            - simple syntax similarity
             
-            4. Detect suspiciously similar logic patterns between students.
-            
-            IMPORTANT:
-            Since embeddings contain NATURAL LANGUAGE SUMMARIES instead of raw source code:
-            - DO NOT search using exact code snippets.
-            - DO NOT rely on variable names.
-            - Focus on implementation behavior and algorithmic similarity.
-            - Compare semantic meaning and execution logic instead of literal code similarity.
+            Different algorithms or clearly different approaches
+            should NOT be considered plagiarism.
             """)
     public String searchStudentCode(
 
