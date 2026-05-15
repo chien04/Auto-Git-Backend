@@ -40,6 +40,13 @@ public class DatabaseQueryTool {
             Use searchStudentCode instead for source code analysis.
             
             IMPORTANT:
+            - 1 row = 1 task submission
+                        - NOT 1 row = 1 assignment
+            
+            Therefore:
+            - one assignment contains multiple tasks
+            - one student may appear in many rows
+            - each row belongs to exactly one task
             - One student may submit multiple tasks.
             - Each task has an order_no value representing task order:
               1 = task1
@@ -51,36 +58,64 @@ public class DatabaseQueryTool {
 
             @P("""
                     LIST OF COLUMNS TO SELECT (comma separated).
-                    
                     ALWAYS include:
                     - assignment_title
                     - student_name
-                    
-                    VALID COLUMNS:
-                    - assignment_title
-                    - student_name
-                    - task_name
-                    - order_no
-                    - score
-                    - pass
-                    - total
-                    - status
-                    - error_message
-                    - execution_time
-                    - memory_used
-                    - language
                     
                     NEVER SELECT:
                     - student_id
                     - assignment_code
                     - source_code
+                    
+                    VALID COLUMNS:
+                    
+                    assignment_title
+                    - assignment name
+                    
+                    student_name
+                    - student full name
+                    
+                    task_name
+                    - task title
+                    
+                    order_no
+                    - task order number (1 = task1, 2 = task2, ...)
+                    
+                    score
+                    - score for ONE task only
+                    
+                    pass
+                    - passed testcase count
+                    
+                    total
+                    - total testcase count
+                    
+                    status
+                    - task submission result
+                    - Possible values: Accepted | Wrong Answer | Compilation Error | Runtime Error | Time Limit Exceeded | NULL
+                    - NULL means this specific task was NOT submitted (not the whole assignment)
+                    
+                    error_message
+                    - compile/runtime error detail
+                    
+                    execution_time
+                    - runtime in milliseconds
+                    
+                    memory_used
+                    - memory usage in KB
+                    
+                    language
+                    - programming language
+                    
+                    total_tasks_required
+                    - total required tasks in assignment
                     """)
             String selectColumns,
 
             @P("""
                     WHERE conditions (WITHOUT the 'WHERE' keyword).
                     
-                    Examples:
+                    Basic examples:
                     - order_no = 1
                     - status = 'Compilation Error'
                     - language = 'Java'
@@ -89,7 +124,44 @@ public class DatabaseQueryTool {
                     - order_no = 1 → task1
                     - order_no = 2 → task2
                     
-                    Leave empty if no additional filtering is needed.
+                    ═══════════════════════════════════════════
+                    SEMANTIC MAPPING — ALWAYS apply these rules
+                    ═══════════════════════════════════════════
+                    
+                    "đã làm" / "đã nộp" / "có nộp" / "submitted"
+                        → status IS NOT NULL
+                    
+                    "chưa làm" / "chưa nộp" / "không nộp" / "not submitted"
+                        → status IS NULL
+                    
+                    "làm đúng" / "pass" / "đạt" / "correct"
+                        → status = 'Accepted'
+                    
+                    "sai" / "wrong answer"
+                        → status = 'Wrong Answer'
+                    
+                    "bị lỗi" / "có lỗi" / "failed" (non-specific)
+                        → status != 'Accepted' AND status IS NOT NULL
+                    
+                    "lỗi biên dịch" / "compile error"
+                        → status = 'Compilation Error'
+                    
+                    "lỗi runtime" / "runtime error"
+                        → status = 'Runtime Error'
+                    
+                    "quá thời gian" / "TLE" / "timeout"
+                        → status = 'Time Limit Exceeded'
+                    
+                    "bài X" / "task X" / "câu X"
+                        → order_no = X
+                    
+                    ═══════════════════════════════════════════
+                    
+                    Combine conditions with AND when multiple filters apply.
+                    Example: user asks "ai đã nộp bài 2 bằng Java"
+                        → order_no = 2 AND status IS NOT NULL AND language = 'Java'
+                    
+                    Leave empty if no filtering is needed.
                     """)
             String conditions,
 
