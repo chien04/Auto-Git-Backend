@@ -27,115 +27,37 @@ public class VectorQueryTool {
     private static final String COLLECTION_NAME = "ai_chat";
 
     @Tool("""
-            Perform semantic search over algorithm descriptions and implementation summaries stored in the Vector DB.
+            Semantic search over algorithm descriptions and implementation summaries in the Vector DB.
             
-            USE THIS TOOL FOR:
-            - Finding related solution logic
-            - Comparing implementation approaches
-            - Detecting structurally similar algorithms
-            - Understanding how students solved a problem
+            Use for: algorithm analysis, comparing approaches, detecting similar implementations, plagiarism detection.
+            Do NOT use for: scores, submission statistics, student lists.
             
-            DO NOT USE THIS TOOL FOR:
-            - Scores
-            - Submission statistics
-            - Student lists
-            - Submission status reports
+            The Vector DB stores NATURAL LANGUAGE DESCRIPTIONS of student code, not raw source.
+            Each entry contains: algorithm summary, execution flow, data structure usage, implementation behavior.
             
-            The Vector DB stores NATURAL LANGUAGE DESCRIPTIONS of source code,
-            NOT raw source code.
-            
-            Each embedding may contain:
-            - Algorithm summaries
-            - Execution flow descriptions
-            - Data structure usage
-            - High-level implementation behavior
-            
-            IMPORTANT:
-            This tool ONLY retrieves semantically related implementation descriptions.
-            
-            The assistant MUST decide:
-            - how much detail to show
-            - whether detailed analysis is necessary
-            - whether code snippets should be shown
-            
-            Do NOT automatically generate:
-            - long comparisons
-            - detailed reports
-            - full algorithm explanations
-            - source code output
-            
-            ════════════════════════════════════════
-            PLAGIARISM DETECTION RULES
-            ════════════════════════════════════════
-            
-            Focus ONLY on:
-            - algorithm structure
-            - execution flow
-            - implementation strategy
-            - control flow similarity
-            
-            Ignore:
-            - same problem requirements
-            - same functionality
-            - similar outputs
-            - variable names
-            - simple syntax similarity
-            
-            Different algorithms or clearly different approaches
-            should NOT be considered plagiarism.
+            Only retrieve results. The assistant decides how much to show and whether analysis is needed.
+            Do NOT auto-generate long comparisons, reports, or full source code output.
             """)
     public String searchStudentCode(
 
             @P("""
                     Semantic description to search for.
-                    MUST NOT be empty or null.
-                    
-                    IMPORTANT: Pass the 'SYSTEM REWRITTEN QUERY INFO' provided in the context directly here.
-                    Do not translate, evaluate, or rewrite it again. Pass the EXACT STRING verbatim.
+                    Pass the exact string from 'SYSTEM REWRITTEN QUERY INFO' verbatim. Do not translate or rewrite.
                     """)
             String semanticQuery,
 
             @P("""
-                    Student names to analyze.
-                    
-                    Rules:
-                    - Single student:
-                      "Nguyen Van A"
-                    
-                    - Multiple students:
-                      "Nguyen Van A, Tran Van B"
-                    
-                    - Entire class:
-                      "ALL"
-                    
-                    IMPORTANT:
-                    Use "ALL" for:
-                    - plagiarism detection
-                    - comparing solution strategies
-                    - finding similar implementations
+                    Student names to filter. Comma-separated for multiple. Use "ALL" for class-wide search (plagiarism, compare strategies).
                     """)
             String studentNames,
 
-            @P("""
-                    Task order number corresponding to order_no in the database.
-                    
-                    Examples:
-                    - "1" → task1
-                    - "2" → task2
-                    - "ALL" → search across all tasks
-                    """)
+            @P("Task order number (1, 2, 3...) or \"ALL\" to search across all tasks.")
             String taskOrderNo,
 
-            @P("""
-                    Current assignment code.
-                    REQUIRED.
-                    """)
+            @P("Current assignment code. Required.")
             String assignmentCode,
 
-            @P("""
-                    Set to true ONLY if the user explicitly asks to check plagiarism or compare all students in the class.
-                    Set to false for regular algorithm searches.
-                    """)
+            @P("Set to true ONLY when user explicitly requests plagiarism check or full-class comparison. False otherwise.")
             Boolean isPlagiarismCheck
     ) {
         log.info("[Vector Tool] AI đang tìm kiếm: query='{}', student='{}', file='{}', isPlagiarismCheck={}", semanticQuery, studentNames, taskOrderNo, isPlagiarismCheck);
