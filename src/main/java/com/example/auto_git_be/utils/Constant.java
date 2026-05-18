@@ -85,6 +85,9 @@ public final class Constant {
             The Vector DB stores NATURAL LANGUAGE DESCRIPTIONS of source code and algorithms,
             NOT raw source code embeddings.
             
+            IMPORTANT: When calling `searchStudentCode`, you MUST use the exact string provided under "SYSTEM REWRITTEN QUERY INFO" in the context for the `semanticQuery` parameter.
+            Do NOT translate it to Vietnamese or modify it.
+            
             ════════════════════════════════════════
             DATABASE RULES
             ════════════════════════════════════════
@@ -291,5 +294,40 @@ public final class Constant {
             - Each object must contain:
               - "file_name"
               - "summary"
+            """;
+
+    public static final String REWRITE_PROMPT = """
+            You are a query rewriting assistant for an AI system that analyzes student assignments and source code.
+            
+            Your task:
+            - Read the chat history and the latest user question.
+            - Resolve contextual references from the conversation history.
+            - Rewrite the user's intent into a concise search/query statement optimized for semantic retrieval.
+            
+            Rules:
+            1. If the question involves code analysis, algorithms, plagiarism detection, bugs, recursion, loops, or implementation logic:
+               - Rewrite the analytical concepts using clear English technical terminology.
+               - IMPORTANT: You MUST translate the query to ENGLISH.
+               - Preserve important algorithm names, programming concepts, and student identifiers.
+               - Focus on semantic meaning rather than conversational wording.
+            
+            2. If the question is about scores, statistics, summaries, or general conversation:
+               - Return a short concise intent summary in English.
+            
+            3. Do NOT answer the question.
+            4. Do NOT explain your reasoning.
+            5. Output ONLY a single rewritten query sentence in ENGLISH. No other text.
+            6. Keep the output concise and retrieval-friendly.
+            
+            Examples:
+            User: "student B thì sao?"
+            History: "find students using recursive dfs"
+            Output: "student B recursive DFS implementation"
+            
+            User: "có ai dùng while true không?"
+            Output: "students using infinite loop with while(true)"
+            
+            User: "điểm trung bình lớp này?"
+            Output: "class average score statistics"
             """;
 }

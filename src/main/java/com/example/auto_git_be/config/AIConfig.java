@@ -50,7 +50,16 @@ public class AIConfig {
     }
 
     @Bean
-    public ChatLanguageModel blockingChatModel() {
+    public ChatLanguageModel normalChatModel() {
+        return OpenAiChatModel.builder()
+                .apiKey(openAiKey)
+                .modelName("gpt-4o-mini")
+                .temperature(0.0)
+                .build();
+    }
+
+    @Bean
+    public ChatLanguageModel jsonChatModel() {
         return OpenAiChatModel.builder()
                 .apiKey(openAiKey)
                 .modelName("gpt-4o-mini")

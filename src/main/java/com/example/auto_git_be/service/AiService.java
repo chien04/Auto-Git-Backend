@@ -29,6 +29,7 @@ import dev.langchain4j.service.TokenStream;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -40,12 +41,12 @@ import java.util.*;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class AiService {
     private final EmbeddingModel embeddingModel;
     private final EmbeddingStore<TextSegment> embeddingStore;
     private final StreamingChatLanguageModel streamingChatLanguageModel;
-    private final ChatLanguageModel chatLanguageModel;
+    private final ChatLanguageModel normalChatModel;
+    private final ChatLanguageModel jsonChatModel;
     private final SimpMessagingTemplate template;
     private final MessageService messageService;
     private final FileCacheService fileCacheService;
@@ -53,6 +54,34 @@ public class AiService {
     private final MessageRepository messageRepository;
     private final ObjectMapper objectMapper;
     private final TeacherAiService teacherAiService;
+
+    public AiService(
+            EmbeddingModel embeddingModel,
+            EmbeddingStore<TextSegment> embeddingStore,
+            StreamingChatLanguageModel streamingChatLanguageModel,
+            @Qualifier("normalChatModel") ChatLanguageModel normalChatModel,
+            @Qualifier("jsonChatModel") ChatLanguageModel jsonChatModel,
+            SimpMessagingTemplate template,
+            MessageService messageService,
+            FileCacheService fileCacheService,
+            ChatHistoryCacheService chatHistoryCacheService,
+            MessageRepository messageRepository,
+            ObjectMapper objectMapper,
+            TeacherAiService teacherAiService
+    ) {
+        this.embeddingModel = embeddingModel;
+        this.embeddingStore = embeddingStore;
+        this.streamingChatLanguageModel = streamingChatLanguageModel;
+        this.normalChatModel = normalChatModel;
+        this.jsonChatModel = jsonChatModel;
+        this.template = template;
+        this.messageService = messageService;
+        this.fileCacheService = fileCacheService;
+        this.chatHistoryCacheService = chatHistoryCacheService;
+        this.messageRepository = messageRepository;
+        this.objectMapper = objectMapper;
+        this.teacherAiService = teacherAiService;
+    }
 
     public void generateStudentStreamingResponse(Long userId, AiChatRequest aiChatRequest) throws JsonProcessingException {
         log.info("Bắt đầu xử lý AI cho Học sinh {}: {}", userId, aiChatRequest.getMessage());
@@ -72,19 +101,25 @@ public class AiService {
         chatHistoryCacheService.pushMessage(userId, "user", userQuestion);
 
         StringBuilder fullContextMessage = new StringBuilder();
+        StringBuilder chatHistoryBuilder = new StringBuilder();
         List<String> chatContext = getConversationContext(userId);
         if (chatContext != null && !chatContext.isEmpty()) {
-            fullContextMessage.append("--- LỊCH SỬ TRÒ CHUYỆN ---\n");
+            fullContextMessage.append("---  CHAT HISTORY ---\n");
             for (String json : chatContext) {
                 JsonNode node = objectMapper.readTree(json);
-                fullContextMessage.append(node.get("role").asText()).append(": ")
-                        .append(node.get("content").asText()).append("\n");
+                String role = node.get("role").asText();
+                String content = node.get("content").asText();
+                fullContextMessage.append(role).append(": ").append(content).append("\n");
+                chatHistoryBuilder.append(role).append(": ").append(content).append("\n");
             }
             fullContextMessage.append("--------------------------\n\n");
         }
 
+        String rewrittenQuery = rewriteQueryForTeacher(userQuestion, chatHistoryBuilder.toString());
+        log.info("[AI] Rewritten query: {}", rewrittenQuery);
+
         if (aiChatRequest.getFiles() != null && !aiChatRequest.getFiles().isEmpty()) {
-            fullContextMessage.append("Ngữ cảnh mã nguồn hiện tại:\n");
+            fullContextMessage.append("Current source code context:\n");
             for (FileContext file : aiChatRequest.getFiles()) {
                 fullContextMessage.append("<file name=\"").append(file.getFilename()).append("\">\n```\n")
                         .append(file.getFileContent())
@@ -92,7 +127,8 @@ public class AiService {
             }
         }
 
-        fullContextMessage.append("CÂU HỎI MỚI CỦA NGƯỜI DÙNG:\n").append(userQuestion);
+        fullContextMessage.append("USER'S ORIGINAL QUESTION:\n").append(userQuestion).append("\n\n");
+        fullContextMessage.append("SYSTEM REWRITTEN QUERY INFO:\n").append(rewrittenQuery).append("\n");
 
         String destination = "/queue/ai-stream";
 
@@ -109,7 +145,6 @@ public class AiService {
                 .onCompleteResponse(response -> {
                     try {
                         String fullResponse = response.aiMessage().text();
-                        // Thêm dòng này để xem trọn vẹn câu trả lời AI sinh ra
                         chatHistoryCacheService.pushMessage(userId, "assistant", fullResponse);
                         template.convertAndSendToUser(userId.toString(), destination, "Done");
                         messageService.sendMessage(Constant.AI_ID, userId, null, fullResponse, MessageType.AI_CHAT);
@@ -122,6 +157,21 @@ public class AiService {
                     template.convertAndSendToUser(userId.toString(), destination, "AI gặp lỗi truy xuất dữ liệu.");
                 })
                 .start();
+    }
+
+    private String rewriteQueryForTeacher(String userQuestion, String chatHistory) {
+        try {
+            String userPrompt = "Chat history:\\n" + chatHistory + "\\n\\nLatest user question: " + userQuestion;
+
+            ChatResponse response = normalChatModel.chat(
+                    SystemMessage.from(Constant.REWRITE_PROMPT),
+                    UserMessage.from(userPrompt)
+            );
+            return response.aiMessage().text();
+        } catch (Exception e) {
+            log.error("Lỗi khi rewrite query", e);
+            return userQuestion;
+        }
     }
 
     private List<ChatMessage> buildChatMessages(Long userId, String systemPrompt, AiChatRequest aiChatRequest) throws JsonProcessingException {
@@ -147,14 +197,14 @@ public class AiService {
         StringBuilder currentPrompt = new StringBuilder();
 
         if (aiChatRequest.getFiles() != null && !aiChatRequest.getFiles().isEmpty()) {
-            currentPrompt.append("Ngữ cảnh mã nguồn hiện tại:\n\n");
+            currentPrompt.append("Current source code context:\n\n");
             for (FileContext file : aiChatRequest.getFiles()) {
                 currentPrompt.append("<file name=\"").append(file.getFilename()).append("\">\n```\n")
                         .append(file.getFileContent())
                         .append("\n```\n</file>\n\n");
             }
         }
-        currentPrompt.append("CÂU HỎI CỦA NGƯỜI DÙNG:\n").append(userQuestion);
+        currentPrompt.append("User's question:\n").append(userQuestion);
         messages.add(new UserMessage(currentPrompt.toString()));
 
         return messages;
@@ -273,7 +323,7 @@ public class AiService {
 
                 log.info("[AI] Đang gọi LLM tóm tắt {} file cho sinh viên: {}", filesBatch.size(), studentName);
 
-                ChatResponse response = chatLanguageModel.chat(
+                ChatResponse response = jsonChatModel.chat(
                         SystemMessage.from(systemPrompt),
                         UserMessage.from(userPrompt)
                 );

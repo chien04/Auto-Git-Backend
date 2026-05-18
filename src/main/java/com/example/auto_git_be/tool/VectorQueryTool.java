@@ -90,29 +90,8 @@ public class VectorQueryTool {
                     Semantic description to search for.
                     MUST NOT be empty or null.
                     
-                    Since the Vector DB stores English natural-language
-                    descriptions of source code, always convert programming
-                    concepts into technical English descriptions before searching.
-                    
-                    Examples:
-                    - "đệ quy"
-                      → "recursive function calling itself"
-                    
-                    - "vòng lặp vô hạn"
-                      → "infinite loop using while(true)"
-                    
-                    - "quy hoạch động"
-                      → "dynamic programming state transition solution"
-                    
-                    - "tham lam"
-                      → "greedy algorithm choosing local optimum"
-                    
-                    Focus on:
-                    - algorithm behavior
-                    - execution flow
-                    - implementation strategy
-                    - data structure usage
-                    - logical patterns
+                    IMPORTANT: Pass the 'SYSTEM REWRITTEN QUERY INFO' provided in the context directly here.
+                    Do not translate, evaluate, or rewrite it again. Pass the EXACT STRING verbatim.
                     """)
             String semanticQuery,
 
@@ -151,9 +130,15 @@ public class VectorQueryTool {
                     Current assignment code.
                     REQUIRED.
                     """)
-            String assignmentCode
+            String assignmentCode,
+
+            @P("""
+                    Set to true ONLY if the user explicitly asks to check plagiarism or compare all students in the class.
+                    Set to false for regular algorithm searches.
+                    """)
+            Boolean isPlagiarismCheck
     ) {
-        log.info("[Vector Tool] AI đang tìm kiếm: query='{}', student='{}', file='{}'", semanticQuery, studentNames, taskOrderNo);
+        log.info("[Vector Tool] AI đang tìm kiếm: query='{}', student='{}', file='{}', isPlagiarismCheck={}", semanticQuery, studentNames, taskOrderNo, isPlagiarismCheck);
 
         try {
             float[] vectorArray = embeddingModel.embed(semanticQuery).content().vector();
@@ -161,7 +146,7 @@ public class VectorQueryTool {
             for (float v : vectorArray) vector.add(v);
 
             int limit = 5;
-            float thresholdScore = 0;
+            float thresholdScore;
             boolean isAllStudents = studentNames == null || studentNames.equalsIgnoreCase("ALL");
             List<String> namesList = new ArrayList<>();
 
@@ -173,8 +158,12 @@ public class VectorQueryTool {
                 if (namesList.size() > 1) limit = 10;
                 thresholdScore = 0f;
             } else {
-                limit = 100;
-                thresholdScore = 0.3f;
+                if (Boolean.TRUE.equals(isPlagiarismCheck)) {
+                    limit = Integer.MAX_VALUE;
+                    thresholdScore = 0f;
+                } else {
+                    thresholdScore = 0.3f;
+                }
             }
             Filter qdrantFilter = buildFilter(assignmentCode, namesList, taskOrderNo);
 
