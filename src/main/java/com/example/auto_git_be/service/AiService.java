@@ -38,6 +38,7 @@ import org.springframework.stereotype.Service;
 import com.example.auto_git_be.tool.TeacherAiService;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
 @Service
@@ -138,15 +139,17 @@ public class AiService {
                 fullContextMessage.toString()
         );
 
+        AtomicInteger sequence = new AtomicInteger(0);
+
         tokenStream
                 .onPartialResponse(token -> {
-                    template.convertAndSendToUser(userId.toString(), destination, token);
+                    sendAiStreamChunk(userId, destination, sequence.getAndIncrement(), token);
                 })
                 .onCompleteResponse(response -> {
                     try {
                         String fullResponse = response.aiMessage().text();
                         chatHistoryCacheService.pushMessage(userId, "assistant", fullResponse);
-                        template.convertAndSendToUser(userId.toString(), destination, "Done");
+                        sendAiStreamDone(userId, destination, sequence.getAndIncrement());
                         messageService.sendMessage(Constant.AI_ID, userId, null, fullResponse, MessageType.AI_CHAT);
                     } catch (Exception e) {
                         log.error("Lỗi khi lưu kết quả chat: ", e);
@@ -154,9 +157,32 @@ public class AiService {
                 })
                 .onError(error -> {
                     log.error("Lỗi quá trình stream AI (Giáo viên): ", error);
-                    template.convertAndSendToUser(userId.toString(), destination, "AI gặp lỗi truy xuất dữ liệu.");
+                    sendAiStreamError(userId, destination, sequence.getAndIncrement(), "AI gặp lỗi truy xuất dữ liệu.");
                 })
                 .start();
+    }
+
+    private void sendAiStreamChunk(Long userId, String destination, int sequence, String content) {
+        template.convertAndSendToUser(userId.toString(), destination, Map.of(
+                "type", "chunk",
+                "sequence", sequence,
+                "content", content == null ? "" : content
+        ));
+    }
+
+    private void sendAiStreamDone(Long userId, String destination, int sequence) {
+        template.convertAndSendToUser(userId.toString(), destination, Map.of(
+                "type", "done",
+                "sequence", sequence
+        ));
+    }
+
+    private void sendAiStreamError(Long userId, String destination, int sequence, String content) {
+        template.convertAndSendToUser(userId.toString(), destination, Map.of(
+                "type", "error",
+                "sequence", sequence,
+                "content", content == null ? "AI khong phan hoi!" : content
+        ));
     }
 
     private String rewriteQueryForTeacher(String userQuestion, String chatHistory) {
@@ -215,18 +241,19 @@ public class AiService {
 
         return new StreamingChatResponseHandler() {
             private final StringBuilder fullAiResponse = new StringBuilder();
+            private int sequence = 0;
 
             @Override
             public void onPartialResponse(String partialResponse) {
                 fullAiResponse.append(partialResponse);
-                template.convertAndSendToUser(userId.toString(), destination, partialResponse);
+                sendAiStreamChunk(userId, destination, sequence++, partialResponse);
             }
 
             @Override
             public void onCompleteResponse(ChatResponse response) {
                 try {
                     chatHistoryCacheService.pushMessage(userId, "assistant", fullAiResponse.toString());
-                    template.convertAndSendToUser(userId.toString(), destination, "Done");
+                    sendAiStreamDone(userId, destination, sequence++);
                     messageService.sendMessage(
                             Constant.AI_ID,
                             userId,
@@ -243,7 +270,7 @@ public class AiService {
             @Override
             public void onError(Throwable throwable) {
                 log.error("Lỗi phản hồi {}: {}", userId, throwable.getMessage());
-                template.convertAndSendToUser(userId.toString(), destination, "AI không phản hồi!");
+                sendAiStreamError(userId, destination, sequence++, "AI không phản hồi!");
             }
         };
     }

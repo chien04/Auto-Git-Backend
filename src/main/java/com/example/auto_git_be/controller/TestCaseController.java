@@ -4,7 +4,6 @@ import com.example.auto_git_be.dto.testcase.TaskZipUploadItem;
 import com.example.auto_git_be.service.TestCaseService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -23,9 +22,6 @@ import java.util.Map;
 public class TestCaseController {
 
     private final TestCaseService testCaseService;
-    
-    @Value("${backend.url:http://localhost:8080}")
-    private String backendUrl;
 
     @PostMapping(value = "/upload-task-zips", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<Map<String, Object>> uploadTaskTestCasesZips(

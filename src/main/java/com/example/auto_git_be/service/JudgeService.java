@@ -51,9 +51,15 @@ public class JudgeService {
                         tc.getOutputContent()
                 )).toList();
 
+        if(submissions.isEmpty()) {
+            ExecuteResponse response = new ExecuteResponse();
+            response.setResults(new ArrayList<>());
+            return response;
+        }
+
         Judge0BatchRequest payload = new Judge0BatchRequest(submissions);
 
-        List<Judge0TokenResponse> tokenList = null;
+        List<Judge0TokenResponse> tokenList;
 
         try {
             tokenList = judgeWebClient.post()
@@ -287,7 +293,7 @@ public class JudgeService {
     }
 
     private Judge0BatchResponse fetchResultsWithPolling(String tokens) {
-        int maxRetries = 30;
+        int maxRetries = 50;
         int attempts = 0;
         boolean isFinished = false;
         Judge0BatchResponse resultPayload = null;
@@ -329,7 +335,7 @@ public class JudgeService {
         }
 
         if (!isFinished) {
-            throw new RuntimeException("Lỗi: Server Judge0 quá tải, chấm bài mất quá 5 giây.");
+            throw new RuntimeException("Lỗi: Server Judge0 quá tải, chấm bài mất quá 10 giây.");
         }
 
         return resultPayload;

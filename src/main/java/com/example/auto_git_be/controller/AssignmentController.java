@@ -404,7 +404,7 @@ public class AssignmentController {
         String localPath = studentAssignment.getLocalPath();
         return ResponseEntity.ok(Map.of(
                 "localPath", localPath,
-                "exists", localPath != null && !localPath.isBlank(),
+                "exists", !localPath.isBlank(),
                 "branchName", studentAssignment.getBranchName()
         ));
     }

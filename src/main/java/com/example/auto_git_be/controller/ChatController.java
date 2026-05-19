@@ -19,13 +19,8 @@ import lombok.extern.slf4j.Slf4j;
 public class ChatController {
 
 	private final MessageService messageService;
-	private final AiService aiService;
 	private final SimpMessagingTemplate messagingTemplate;
 
-	/**
-	 * Private chat endpoint: /app/chat.private
-	 * Sender/receiver subscribe to /user/queue/private
-	 */
 	@MessageMapping("/chat.private")
 	public void sendPrivateMessage(@Payload SendMessageRequest request, SimpMessageHeaderAccessor headerAccessor) {
 			Long senderId = extractUserId(headerAccessor);
@@ -57,10 +52,6 @@ public class ChatController {
 			);
 	}
 
-	/**
-	 * Group chat endpoint: /app/chat.class
-	 * Users subscribe to /topic/class/{classroomId}
-	 */
 	@MessageMapping("/chat.class")
 	public void sendClassMessage(@Payload SendMessageRequest request, SimpMessageHeaderAccessor headerAccessor) {
 			Long senderId = extractUserId(headerAccessor);
