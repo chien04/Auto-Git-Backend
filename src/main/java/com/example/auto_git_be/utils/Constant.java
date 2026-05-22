@@ -33,10 +33,19 @@ public final class Constant {
             
             executeQuery — Query statistics (scores, submission status, rankings, error reports).
             - Do NOT use for source code analysis.
+            - Use for execution_time questions: fastest, slowest, runtime, smallest execution time, optimal by measured time.
+            - Do not confuse execution_time with SQL EXEC/EXECUTE.
             
             searchStudentCode — Semantic search over student code (algorithms, logic, plagiarism).
             - Vector DB stores NATURAL LANGUAGE DESCRIPTIONS of code, not raw source.
             - Always pass the exact string from "SYSTEM REWRITTEN QUERY INFO" as `semanticQuery`. Do not translate or modify it.
+            - MUST use for code-related questions: algorithm analysis, approach/method, how a solution works, implementation details, code style, data structures, complexity, optimization opportunities, why a solution fails, compare implementations, plagiarism/similarity.
+            
+            TOOL ROUTING:
+            - Pure metrics/statistics/list/ranking questions -> executeQuery only.
+            - Pure code/algorithm/approach questions -> searchStudentCode.
+            - "Best/optimal solution/algorithm" questions -> correctness first, speed second. Call executeQuery first to find the concrete student/task ordered by score DESC, then execution_time ASC as a tie-breaker, then searchStudentCode for that returned student/task.
+            - If the user asks "student with smallest execution time", use executeQuery with execution_time IS NOT NULL ORDER BY execution_time ASC LIMIT 1. Do not call any code execution tool.
             
             ════════════════════════════════════════
             DATABASE
@@ -58,6 +67,14 @@ public final class Constant {
             
             tailClause accepts: AND ... / GROUP BY ... / HAVING ... / ORDER BY ... / LIMIT ...
             
+            NULL METRIC RULES:
+            - For highest/lowest score, add AND score IS NOT NULL before ORDER BY score.
+            - For fastest/slowest execution time, add AND execution_time IS NOT NULL before ORDER BY execution_time.
+            - For highest/lowest memory usage, add AND memory_used IS NOT NULL before ORDER BY memory_used.
+            - For aggregate score rankings, prefer SUM(COALESCE(score, 0)) only when missing submissions should count as zero. Otherwise use HAVING SUM(score) IS NOT NULL to exclude students with no score data.
+            - For "best/optimal" without a specified metric, prioritize correctness: add AND score IS NOT NULL and ORDER BY score DESC first. Use execution_time only as a tie-breaker: CASE WHEN execution_time IS NULL THEN 1 ELSE 0 END, execution_time ASC.
+            - Never choose a faster solution with lower score over a slower solution with higher score.
+            
             Common patterns:
             
             | Intent | selectClause | tailClause |
@@ -65,8 +82,13 @@ public final class Constant {
             | List submissions | student_name, task_name, score, status | (empty) |
             | Filter by status | student_name, status | AND status = 'Compilation Error' |
             | Filter by task | student_name, score | AND order_no = 2 |
-            | Total score per student | student_name, SUM(score) AS total | GROUP BY student_name ORDER BY total DESC |
-            | Top N students | student_name, SUM(score) AS total | GROUP BY student_name ORDER BY total DESC LIMIT 5 |
+            | Highest score row | student_name, assignment_title, task_name, order_no, score | AND score IS NOT NULL ORDER BY score DESC LIMIT 1 |
+            | Lowest score row | student_name, assignment_title, task_name, order_no, score | AND score IS NOT NULL ORDER BY score ASC LIMIT 1 |
+            | Fastest execution | student_name, assignment_title, task_name, order_no, execution_time | AND execution_time IS NOT NULL ORDER BY execution_time ASC LIMIT 1 |
+            | Slowest execution | student_name, assignment_title, task_name, order_no, execution_time | AND execution_time IS NOT NULL ORDER BY execution_time DESC LIMIT 1 |
+            | Best/optimal row | student_name, assignment_title, task_name, order_no, score, execution_time | AND score IS NOT NULL ORDER BY score DESC, CASE WHEN execution_time IS NULL THEN 1 ELSE 0 END, execution_time ASC LIMIT 1 |
+            | Total score per student | student_name, SUM(score) AS total | GROUP BY student_name HAVING SUM(score) IS NOT NULL ORDER BY total DESC |
+            | Top N students | student_name, SUM(score) AS total | GROUP BY student_name HAVING SUM(score) IS NOT NULL ORDER BY total DESC LIMIT 5 |
             | Score above threshold | student_name, SUM(score) AS total | GROUP BY student_name HAVING SUM(score) > 80 |
             | Fully submitted | student_name | GROUP BY student_name, total_tasks_required HAVING COUNT(status) = MAX(total_tasks_required) |
             | Partially submitted | student_name | GROUP BY student_name, total_tasks_required HAVING COUNT(status) < MAX(total_tasks_required) AND COUNT(status) > 0 |
@@ -101,6 +123,7 @@ public final class Constant {
             ════════════════════════════════════════
             
             Identify: logical mistakes, why solutions fail, algorithm structure, data structures, optimization opportunities.
+            When the question mentions code, algorithm, approach, method, implementation, complexity, optimization, "how to do", "how it works", or asks to analyze/explain a solution, call searchStudentCode before answering unless the answer is already fully contained in the current source code context.
             Do NOT over-explain unless requested.
             
             ════════════════════════════════════════
@@ -149,6 +172,9 @@ public final class Constant {
             Rules:
             1. Code/algorithm questions → rewrite using clear English technical terms. Preserve algorithm names, concepts, student identifiers.
             2. Statistics/score/summary questions → short English intent summary.
+            2a. Preserve metric words exactly when relevant: score, execution_time, memory_used, fastest, slowest, highest, lowest, optimal.
+            2b. Questions about code, algorithm, approach, method, implementation, complexity, optimization, or how a solution works must be rewritten as code retrieval intents.
+            2c. For "best/optimal" questions, rewrite that correctness/score is primary and execution_time is only a tie-breaker.
             3. Do NOT answer the question. Do NOT explain your reasoning.
             4. Output EXACTLY ONE English sentence. Nothing else.
             
@@ -158,5 +184,8 @@ public final class Constant {
             "điểm trung bình lớp này?" → class average score statistics
             "ai đạt 10 điểm câu 2?" → students who scored 10 points on task 2
             "who got compilation errors?" → students with compilation errors
+            "sinh vien nao co thoi gian thuc thi nho nhat?" -> student submission with the smallest non-null execution_time
+            "thuat toan toi uu nhat la gi?" -> optimal algorithm based on the highest non-null score first, then the smallest execution_time as a tie-breaker, and its code implementation
+            "phuong phap lam bai cua ban A nhu the nao?" -> student A code implementation approach and algorithm
             """;
 }

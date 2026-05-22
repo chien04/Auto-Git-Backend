@@ -6,6 +6,8 @@ import com.example.auto_git_be.repository.*;
 import com.example.auto_git_be.utils.Language;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
@@ -22,7 +24,10 @@ import java.util.stream.IntStream;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class JudgeService {
+
+    private static final long POLLING_INTERVAL_MS = 300;
 
     private final WebClient judgeWebClient;
     private final AssignmentRepository assignmentRepository;
@@ -32,6 +37,9 @@ public class JudgeService {
     private final StudentAssignmentRepository studentAssignmentRepository;
     private final StudentTaskResultRepository studentTaskResultRepository;
     private final GitHubService gitHubService;
+
+    @Value("${judge0.polling.max-wait-ms:60000}")
+    private long judge0MaxWaitMs;
 
     public ExecuteResponse runTests(ExecuteRequest request) {
         int langId = Language.getIdByName(request.getLanguage());
@@ -293,14 +301,18 @@ public class JudgeService {
     }
 
     private Judge0BatchResponse fetchResultsWithPolling(String tokens) {
-        int maxRetries = 50;
-        int attempts = 0;
+        long startTime = System.currentTimeMillis();
+        long deadline = startTime + judge0MaxWaitMs;
+
         boolean isFinished = false;
         Judge0BatchResponse resultPayload = null;
+        int pollCount = 0;
 
-        while (attempts < maxRetries && !isFinished) {
+        while (System.currentTimeMillis() < deadline && !isFinished) {
+            pollCount++;
+
             try {
-                Thread.sleep(200);
+                Thread.sleep(POLLING_INTERVAL_MS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new RuntimeException("Tiến trình chờ bị gián đoạn", e);
@@ -311,7 +323,8 @@ public class JudgeService {
                             .path("/submissions/batch")
                             .queryParam("tokens", tokens)
                             .queryParam("base64_encoded", false)
-                            .queryParam("fields", "status_id,stdout,time,memory,stderr,status")
+                            .queryParam("fields",
+                                    "status_id,stdout,time,memory,stderr,status,compile_output")
                             .build())
                     .retrieve()
                     .onStatus(HttpStatusCode::isError, response ->
@@ -324,19 +337,40 @@ public class JudgeService {
             if (resultPayload != null && resultPayload.getSubmissions() != null) {
                 boolean stillProcessing = resultPayload.getSubmissions().stream()
                         .anyMatch(sub -> {
-                            int currentStatus = sub.getStatus() != null ? sub.getStatus().getId() : sub.getStatusId();
+                            int currentStatus = sub.getStatus() != null
+                                    ? sub.getStatus().getId()
+                                    : sub.getStatusId();
+
                             return currentStatus == 1 || currentStatus == 2;
                         });
 
                 isFinished = !stillProcessing;
             }
-
-            attempts++;
         }
+
+        long durationMs = System.currentTimeMillis() - startTime;
 
         if (!isFinished) {
-            throw new RuntimeException("Lỗi: Server Judge0 quá tải, chấm bài mất quá 10 giây.");
+            log.warn(
+                    "Judge0 timeout sau {} ms ({} s), so lan polling: {}",
+                    durationMs,
+                    durationMs / 1000.0,
+                    pollCount
+            );
+
+            throw new RuntimeException(
+                    "Loi: Server Judge0 qua tai, cham bai mat qua "
+                            + (judge0MaxWaitMs / 1000)
+                            + " giay."
+            );
         }
+
+        log.info(
+                "Judge0 hoan thanh sau {} ms ({} s), so lan polling: {}",
+                durationMs,
+                durationMs / 1000.0,
+                pollCount
+        );
 
         return resultPayload;
     }

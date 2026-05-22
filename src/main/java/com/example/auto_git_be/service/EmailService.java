@@ -1,29 +1,32 @@
 package com.example.auto_git_be.service;
 
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
-import java.util.Map;
 import java.util.Random;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 @Service
+@RequiredArgsConstructor
 public class EmailService {
     
     private static final Logger log = LoggerFactory.getLogger(EmailService.class);
     
-    @Autowired
-    private JavaMailSender mailSender;
+    private final JavaMailSender mailSender;
+
+    private final StringRedisTemplate redisTemplate;
     
     @Value("${spring.mail.username}")
     private String fromEmail;
 
-    private final Map<String, OTPData> otpStore = new ConcurrentHashMap<>();
+    private static final String OTP_KEY_PREFIX = "otp:";
     
     @Value("${otp.expiration.minutes:5}")
     private long otpExpirationMinutes;
@@ -32,8 +35,7 @@ public class EmailService {
         try {
             String otp = String.format("%06d", new Random().nextInt(999999));
             
-            long expirationTime = System.currentTimeMillis() + (otpExpirationMinutes * 60 * 1000);
-            otpStore.put(email, new OTPData(otp, expirationTime));
+            redisTemplate.opsForValue().set(buildOTPKey(email), otp, otpExpirationMinutes, TimeUnit.MINUTES);
             
             sendOTPEmail(email, otp);
 
@@ -60,10 +62,7 @@ public class EmailService {
         
         mailSender.send(message);
     }
-    
-    /**
-     * Send general email
-     */
+
     public void sendEmail(String toEmail, String subject, String body) {
         try {
             SimpleMailMessage message = new SimpleMailMessage();
@@ -79,38 +78,23 @@ public class EmailService {
     }
 
     public boolean verifyOTP(String email, String otp) {
-        OTPData storedOTP = otpStore.get(email);
+        String key = buildOTPKey(email);
+        String storedOTP = redisTemplate.opsForValue().get(key);
         
         if (storedOTP == null) {
             return false;
         }
         
-        if (System.currentTimeMillis() > storedOTP.expirationTime) {
-            otpStore.remove(email);
-            return false;
-        }
-        
-        boolean valid = storedOTP.otp.equals(otp);
+        boolean valid = storedOTP.equals(otp);
         
         if (valid) {
-            otpStore.remove(email);
+            redisTemplate.delete(key);
         }
         
         return valid;
     }
 
-    public void clearExpiredOTPs() {
-        long now = System.currentTimeMillis();
-        otpStore.entrySet().removeIf(entry -> now > entry.getValue().expirationTime);
-    }
-    
-    private static class OTPData {
-        String otp;
-        long expirationTime;
-        
-        OTPData(String otp, long expirationTime) {
-            this.otp = otp;
-            this.expirationTime = expirationTime;
-        }
+    private String buildOTPKey(String email) {
+        return OTP_KEY_PREFIX + email;
     }
 }
