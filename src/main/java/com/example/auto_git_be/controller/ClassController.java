@@ -80,10 +80,7 @@ public class ClassController {
 
     @GetMapping("/{classCode}/students")
     public ResponseEntity<List<Map<String, Object>>> getStudents(
-            @PathVariable String classCode,
-            @RequestHeader("Authorization") String authHeader) {
-        String token = authHeader.substring(7);
-        User user = authService.getUserFromToken(token);
+            @PathVariable String classCode) {
 
         List<Student> students = classRoomService.getStudentsInClass(classCode);
 

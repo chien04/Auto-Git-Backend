@@ -29,8 +29,7 @@ public class AuthController {
 
     @PostMapping("/google/callback")
     public ResponseEntity<LoginResponse> handleGoogleCallbackPost(@RequestBody GoogleAuthCodeRequest request) {
-        String role = request.getRole() != null ? request.getRole() : "STUDENT";
-        LoginResponse response = authService.handleGoogleCallback(request.getCode(), role);
+        LoginResponse response = authService.handleGoogleCallback(request.getCode(), request.getRole());
         return ResponseEntity.ok(response);
     }
 

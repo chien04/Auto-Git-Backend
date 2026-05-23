@@ -26,7 +26,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class AssignmentService {
-    
+
     private final AssignmentRepository assignmentRepository;
     private final AssignmentTaskRepository assignmentTaskRepository;
     private final TestCaseRepository testCaseRepository;
@@ -55,25 +55,18 @@ public class AssignmentService {
 
             String repoName = sanitizeRepoName(title + "-" + assignmentCode);
             String repoDescription = "Assignment: " + title + " for class " + classRoom.getName();
-            
+
             GHRepository ghRepo = gitHubService.createRepository(repoName, repoDescription);
 
             gitHubService.createBranch(ghRepo.getFullName(), "teacher", ghRepo.getDefaultBranch());
             gitHubService.deleteFileInRepo(ghRepo.getFullName(), "README.md", "teacher");
             gitHubService.createMultipleFilesInRepo(ghRepo.getFullName(), "teacher", tasks);
 
-            String effectiveDescription = description;
-            if (!tasks.isEmpty()) {
-                String firstTaskDescription = tasks.getFirst().getDescription();
-                if (firstTaskDescription != null && !firstTaskDescription.isBlank()) {
-                    effectiveDescription = firstTaskDescription;
-                }
-            }
 
             Assignment assignment = Assignment.builder()
                     .classRoom(classRoom)
                     .title(title)
-                    .description(effectiveDescription)
+                    .description(description)
                     .assignmentCode(assignmentCode)
                     .repoUrl(ghRepo.getHtmlUrl().toString())
                     .repoName(ghRepo.getFullName())
@@ -84,26 +77,29 @@ public class AssignmentService {
 
             Assignment savedAssignment = assignmentRepository.save(assignment);
 
-            List<AssignmentTask> taskEntities = buildTaskEntities(savedAssignment, description, tasks);
-            List<AssignmentTask> savedTasks = assignmentTaskRepository.saveAll(taskEntities);
+            List<AssignmentTask> taskEntities = buildTaskEntities(savedAssignment, tasks);
 
-            List<TestCase> testCaseEntities = new ArrayList<>();
-            if (!tasks.isEmpty()) {
-                for (int i = 0; i < tasks.size(); i++) {
-                    AssignmentTaskCreateRequest taskDTO = tasks.get(i);
-                    AssignmentTask savedTask = savedTasks.get(i);
+            if (!taskEntities.isEmpty()) {
+                List<AssignmentTask> savedTasks = assignmentTaskRepository.saveAll(taskEntities);
 
-                    if (taskDTO.getSampleTestCases() != null && !taskDTO.getSampleTestCases().isEmpty()) {
-                        List<TestCase> testCasesForThisTask = buildTestCases(savedTask, taskDTO);
-                        testCaseEntities.addAll(testCasesForThisTask);
+                List<TestCase> testCaseEntities = new ArrayList<>();
+                if (!tasks.isEmpty()) {
+                    for (int i = 0; i < tasks.size(); i++) {
+                        AssignmentTaskCreateRequest taskDTO = tasks.get(i);
+                        AssignmentTask savedTask = savedTasks.get(i);
+
+                        if (taskDTO.getSampleTestCases() != null && !taskDTO.getSampleTestCases().isEmpty()) {
+                            List<TestCase> testCasesForThisTask = buildTestCases(savedTask, taskDTO);
+                            testCaseEntities.addAll(testCasesForThisTask);
+                        }
                     }
-                }
-                if (!testCaseEntities.isEmpty()) {
-                    testCaseRepository.saveAll(testCaseEntities);
+                    if (!testCaseEntities.isEmpty()) {
+                        testCaseRepository.saveAll(testCaseEntities);
+                    }
                 }
             }
             return savedAssignment;
-            
+
         } catch (Exception e) {
             throw new RuntimeException("Failed to create assignment: " + e.getMessage(), e);
         }
@@ -111,18 +107,11 @@ public class AssignmentService {
 
     private List<AssignmentTask> buildTaskEntities(
             Assignment assignment,
-            String assignmentDescription,
             List<AssignmentTaskCreateRequest> tasks
     ) {
         List<AssignmentTask> taskEntities = new ArrayList<>();
 
         if (tasks == null || tasks.isEmpty()) {
-            taskEntities.add(AssignmentTask.builder()
-                    .assignment(assignment)
-                    .taskName("Task 1")
-                    .description(assignmentDescription)
-                    .orderNo(1)
-                    .build());
             return taskEntities;
         }
 
@@ -144,7 +133,8 @@ public class AssignmentService {
 
     private List<TestCase> buildTestCases(
             AssignmentTask assignmentTask,
-            AssignmentTaskCreateRequest task) {
+            AssignmentTaskCreateRequest task)
+    {
         List<TestCase> testCases = new ArrayList<>();
         for (TestCaseDTO testCaseDTO : task.getSampleTestCases()) {
             TestCase testCase = new TestCase();
@@ -190,30 +180,30 @@ public class AssignmentService {
         return studentAssignment.getLocalPath();
     }
 
-        @Transactional(readOnly = true)
-        public StudentAssignment getStudentAssignmentInfo(String assignmentCode, User user) {
+    @Transactional(readOnly = true)
+    public StudentAssignment getStudentAssignmentInfo(String assignmentCode, User user) {
         Assignment assignment = getAssignmentByCode(assignmentCode);
 
         Student student = studentRepository.findByUserAndClassRoom(user, assignment.getClassRoom())
-            .orElseThrow(() -> new RuntimeException("You must join the class before opening assignments"));
+                .orElseThrow(() -> new RuntimeException("You must join the class before opening assignments"));
 
         return studentAssignmentRepository
-            .findByStudentAndAssignment(student, assignment)
-            .orElseThrow(() -> new RuntimeException("Student assignment not found"));
-        }
+                .findByStudentAndAssignment(student, assignment)
+                .orElseThrow(() -> new RuntimeException("Student assignment not found"));
+    }
 
     @Transactional
     public void deleteAssignment(String assignmentCode, User teacher) {
         try {
             Assignment assignment = getAssignmentByCode(assignmentCode);
-            
+
             if (!assignment.getClassRoom().getTeacher().getId().equals(teacher.getId())) {
                 throw new RuntimeException("Only the teacher who created the class can delete this assignment");
             }
 
             // Hard delete all comments in this assignment so FK comments(student_id) cannot block cleanup.
             commentRepository.deleteByAssignment(assignment);
-            
+
             List<StudentAssignment> studentAssignments = studentAssignmentRepository.findByAssignment(assignment);
             studentAssignmentRepository.deleteAll(studentAssignments);
 
@@ -230,7 +220,7 @@ public class AssignmentService {
                 System.err.println("Failed to delete GitHub repository for assignment "
                         + assignment.getAssignmentCode() + ": " + githubError.getMessage());
             }
-            
+
         } catch (Exception e) {
             throw new RuntimeException("Failed to delete assignment: " + e.getMessage(), e);
         }
@@ -249,7 +239,7 @@ public class AssignmentService {
 
             Optional<StudentAssignment> saOptional = studentAssignmentRepository.findByStudentAndAssignment(student, assignment);
 
-            if(saOptional.isPresent()) {
+            if (saOptional.isPresent()) {
                 return JoinAssignmentResponse.builder()
                         .repoUrl(assignment.getRepoUrl())
                         .branch(saOptional.get().getBranchName())
@@ -263,7 +253,7 @@ public class AssignmentService {
             String rawName = student.getStudentName() + "-" + student.getId();
             String sanitizedName = rawName.replaceAll("[^a-zA-Z0-9_-]", "_").toLowerCase();
             String branchName = "student-" + sanitizedName;
-            
+
             gitHubService.createBranch(assignment.getRepoName(), branchName, "teacher");
 
             StudentAssignment studentAssignment = StudentAssignment.builder()
@@ -273,7 +263,7 @@ public class AssignmentService {
                     .localPath(localPath != null && !localPath.trim().isEmpty() ? localPath : null)
                     .commitCount(0)
                     .build();
-            
+
             studentAssignmentRepository.save(studentAssignment);
 
             return JoinAssignmentResponse.builder()
@@ -284,7 +274,7 @@ public class AssignmentService {
                     .assignmentTitle(assignment.getTitle())
                     .deadline(assignment.getDeadline())
                     .build();
-                    
+
         } catch (Exception e) {
             throw new RuntimeException("Failed to join assignment: " + e.getMessage(), e);
         }
@@ -294,9 +284,9 @@ public class AssignmentService {
     public void updateCommitCountForUser(String assignmentCode, User user) {
         try {
             Assignment assignment = getAssignmentByCode(assignmentCode);
-            
+
             List<Student> students = studentRepository.findByUser(user);
-            
+
             StudentAssignment studentAssignment = null;
             for (Student student : students) {
                 Optional<StudentAssignment> optional = studentAssignmentRepository.findByStudentAndAssignment(student, assignment);
@@ -305,7 +295,7 @@ public class AssignmentService {
                     break;
                 }
             }
-            
+
             if (studentAssignment == null) {
                 throw new EntityNotFoundException("StudentAssignment not found for user " + user.getEmail());
             }
@@ -313,7 +303,7 @@ public class AssignmentService {
             studentAssignment.setCommitCount(studentAssignment.getCommitCount() + 1);
             studentAssignment.setLastCommitAt(LocalDateTime.now());
             studentAssignmentRepository.save(studentAssignment);
-            
+
         } catch (Exception e) {
             throw new RuntimeException("Failed to update commit count: " + e.getMessage(), e);
         }
@@ -325,7 +315,7 @@ public class AssignmentService {
             String repoUrl = "https://github.com/" + request.getRepoFullName();
             Assignment assignment = assignmentRepository.findByRepoUrl(repoUrl)
                     .orElseThrow(() -> new RuntimeException("Assignment not found for repo: " + repoUrl));
-            
+
             StudentAssignment studentAssignment = studentAssignmentRepository
                     .findByAssignmentAndBranchName(assignment, request.getBranchName())
                     .orElseThrow(() -> new RuntimeException("Student assignment not found for branch: " + request.getBranchName()));
@@ -369,8 +359,8 @@ public class AssignmentService {
                     request.getScore(),
                     assignment.getAssignmentCode(),
                     assignment.getClassRoom().getClassCode()
-                );
-            
+            );
+
         } catch (Exception e) {
             throw new RuntimeException("Failed to update score: " + e.getMessage(), e);
         }

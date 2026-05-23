@@ -5,6 +5,7 @@ import com.example.auto_git_be.dto.auth.LoginResponse;
 import com.example.auto_git_be.entity.User;
 import com.example.auto_git_be.repository.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
@@ -18,13 +19,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 @Service
+@RequiredArgsConstructor
 public class AuthService {
 
-    @Autowired
-    private UserRepository userRepository;
+    private final UserRepository userRepository;
 
-    @Autowired
-    private JwtService jwtService;
+    private final JwtService jwtService;
 
     @Value("${spring.security.oauth2.client.registration.google.client-id}")
     private String googleClientId;

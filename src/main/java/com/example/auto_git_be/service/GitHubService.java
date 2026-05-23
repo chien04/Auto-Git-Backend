@@ -83,69 +83,6 @@ public class GitHubService {
         return count;
     }
 
-    public List<GHCommit> getCommits(String repoFullName, String branchName) throws IOException {
-        try {
-            GitHub gh = getGitHub();
-            
-            // Check rate limit
-            GHRateLimit rateLimit = gh.getRateLimit();
-            
-            if (rateLimit.getCore().getRemaining() < 10) {
-                throw new IOException("GitHub API rate limit exceeded. Reset at: " + rateLimit.getCore().getResetDate());
-            }
-            
-            GHRepository repo = gh.getRepository(repoFullName);
-            
-            // Check if branch exists
-            GHBranch branch = null;
-            try {
-                branch = repo.getBranch(branchName);
-            } catch (Exception e) {
-                throw new IOException("Branch '" + branchName + "' not found in repository.");
-            }
-            
-            List<GHCommit> commitList = new ArrayList<>();
-            
-            try {
-                // Method 1: Try with queryCommits (might fail with 403 on some repos)
-                PagedIterable<GHCommit> commits = repo.queryCommits()
-                        .from(branchName)
-                        .list();
-                
-                int count = 0;
-                for (GHCommit commit : commits) {
-                    if (count >= 50) break;
-                    commitList.add(commit);
-                    count++;
-                }
-                
-            } catch (Exception e) {
-                // Method 2: Fallback to listCommits
-                PagedIterable<GHCommit> commits = repo.listCommits();
-                
-                int count = 0;
-                for (GHCommit commit : commits) {
-                    // Filter by branch
-                    try {
-                        if (commit.getSHA1().equals(branch.getSHA1()) || 
-                            repo.getBranch(branchName).getSHA1().startsWith(commit.getSHA1().substring(0, 7))) {
-                            if (count >= 50) break;
-                            commitList.add(commit);
-                            count++;
-                        }
-                    } catch (Exception ex) {
-                        // Skip this commit
-                    }
-                }
-            }
-            
-            return commitList;
-            
-        } catch (IOException e) {
-            throw e;
-        }
-    }
-
     public String getToken() {
         return githubToken;
     }
@@ -164,7 +101,7 @@ public class GitHubService {
             int orderNo = task.getOrderNo() != null ? task.getOrderNo() : (i + 1);
             String taskFileName = "task" + orderNo + ".cpp";
 
-            String taskContent = "\n#include <iostream>\nusing namespace std;\n\nint main() {\n    // Your code here\n    return 0;\n}\n";
+            String taskContent = "#include <iostream>\nusing namespace std;\n\nint main() {\n    // Your code here\n    return 0;\n}\n";
 
             treeBuilder.add(taskFileName, taskContent, false);
         }

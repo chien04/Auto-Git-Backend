@@ -199,24 +199,16 @@ public class ClassRoomService {
                     
                     List<StudentAssignment> studentAssignments = studentAssignmentRepository.findByAssignment(assignment);
                     studentAssignmentRepository.deleteAll(studentAssignments);
-                    
-                    List<TeacherAssignment> teacherAssignments = teacherAssignmentRepository.findByAssignment(assignment);
-                    teacherAssignmentRepository.deleteAll(teacherAssignments);
+
                     assignment.setIsActive(false);
                     assignmentRepository.save(assignment);
-                    try {
-                        gitHubService.deleteRepository(assignment.getRepoName());
-                    } catch (Exception githubError) {
-                        System.err.println("Failed to delete GitHub repository for assignment "
-                                + assignment.getAssignmentCode() + ": " + githubError.getMessage());
-                    }
+
                 } catch (Exception e) {
                     System.err.println("Failed to delete assignment " + assignment.getAssignmentCode() + ": " + e.getMessage());
                 }
             }
             
             List<Student> students = studentRepository.findByClassRoom(classRoom);
-            commentRepository.deleteByStudentIn(students);
             studentRepository.deleteAll(students);
             
             classRoom.setIsActive(false);
