@@ -4,7 +4,6 @@ import com.example.auto_git_be.dto.assignment.CreateAssignmentRequest;
 import com.example.auto_git_be.dto.assignment.CreateAssignmentResponse;
 import com.example.auto_git_be.dto.assignment.JoinAssignmentRequest;
 import com.example.auto_git_be.dto.assignment.JoinAssignmentResponse;
-import com.example.auto_git_be.dto.assignment.ScoreUpdateRequest;
 import com.example.auto_git_be.dto.assignment.StudentSubmissionDTO;
 import com.example.auto_git_be.dto.comment.CommentResponse;
 import com.example.auto_git_be.dto.comment.CreateCommentRequest;
@@ -17,7 +16,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
-import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -35,7 +33,6 @@ public class AssignmentController {
     private final AssignmentWorkspaceService assignmentWorkspaceService;
     private final TeacherAssignmentService teacherAssignmentService;
     private final GitHubService gitHubService;
-    private final NotificationService notificationService;
     private final ExcelService excelService;
     private final CommentService commentService;
 
@@ -153,6 +150,44 @@ public class AssignmentController {
         return ResponseEntity.ok(result);
     }
 
+    @GetMapping("/{assignmentCode}")
+    public ResponseEntity<?> getAssignmentByCode(
+            @PathVariable String assignmentCode,
+            @RequestHeader("Authorization") String authHeader) {
+        String token = authHeader.substring(7);
+        User user = authService.getUserFromToken(token);
+
+        Assignment assignment = assignmentService.getAssignmentByCode(assignmentCode);
+        if (assignment == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Assignment not found"));
+        }
+
+        boolean hasAccess = false;
+        if (user.getRole() == User.UserRole.TEACHER) {
+            hasAccess = teacherAssignmentService.hasAccess(user, assignment);
+        } else if (user.getRole() == User.UserRole.STUDENT) {
+            Optional<Student> studentOpt = studentService.findByUserAndClassRoom(user, assignment.getClassRoom());
+            if (studentOpt.isPresent()) {
+                hasAccess = studentAssignmentService.findByStudentAndAssignment(studentOpt.get(), assignment).isPresent();
+            }
+        }
+
+        if (!hasAccess) {
+            return ResponseEntity.status(403).body(Map.of("error", "Not authorized"));
+        }
+
+        Map<String, Object> map = new HashMap<>();
+        map.put("assignmentId", assignment.getId());
+        map.put("assignmentCode", assignment.getAssignmentCode());
+        map.put("title", assignment.getTitle());
+        map.put("description", assignment.getDescription());
+        map.put("repoUrl", assignment.getRepoUrl());
+        map.put("deadline", assignment.getDeadline());
+        map.put("createdAt", assignment.getCreatedAt());
+
+        return ResponseEntity.ok(map);
+    }
+
     @GetMapping("/{assignmentCode}/students")
     public ResponseEntity<List<Map<String, Object>>> getStudentsInAssignment(
             @PathVariable String assignmentCode,
@@ -181,87 +216,6 @@ public class AssignmentController {
         }).collect(Collectors.toList());
 
         return ResponseEntity.ok(result);
-    }
-
-
-    // Update commit count for student assignment (called after push)
-    @PostMapping("/{assignmentCode}/update-commits")
-    public ResponseEntity<Void> updateCommitCount(
-            @PathVariable String assignmentCode,
-            @RequestHeader("Authorization") String authHeader) {
-        String token = authHeader.substring(7);
-        User user = authService.getUserFromToken(token);
-
-        assignmentService.updateCommitCountForUser(assignmentCode, user);
-
-        log.info("Updated commit count for assignment {}", assignmentCode);
-        Assignment assignment = assignmentService.getAssignmentByCode(assignmentCode);
-        List<TeacherAssignment> teacherAssignments = teacherAssignmentService.getTeacherAssignment(assignment);
-
-        if (teacherAssignments != null && !teacherAssignments.isEmpty()) {
-            for (TeacherAssignment ta : teacherAssignments) {
-                if (ta.getTeacher() != null && !ta.getTeacher().getId().equals(user.getId())) {
-                    notificationService.notifyTeacherOnSubmission(ta.getTeacher().getId(), user.getName(), assignment.getTitle(), assignment.getClassRoom().getName());
-                }
-            }
-        } else if (assignment.getClassRoom() != null && assignment.getClassRoom().getTeacher() != null) {
-            Long fallbackTeacherId = assignment.getClassRoom().getTeacher().getId();
-            if (!fallbackTeacherId.equals(user.getId())) {
-                log.warn("No teacher-assignment records found for {}. Fallback notifying class teacher {}.", assignmentCode, fallbackTeacherId);
-                notificationService.notifyTeacherOnSubmission(fallbackTeacherId, user.getName(), assignment.getTitle(), assignment.getClassRoom().getName());
-            }
-        }
-
-        return ResponseEntity.ok().build();
-    }
-
-    // Check if the deadline has passed for an assignment (Student only)
-    @GetMapping("/{assignmentCode}/deadline/check")
-    public ResponseEntity<Map<String, Object>> checkDeadline(
-            @PathVariable String assignmentCode,
-            @RequestHeader("Authorization") String authHeader) {
-        String token = authHeader.substring(7);
-        User user = authService.getUserFromToken(token);
-
-        Assignment assignment = assignmentService.getAssignmentByCode(assignmentCode);
-        if (assignment == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Assignment not found"));
-        }
-
-        LocalDateTime deadline = assignment.getDeadline();
-        Map<String, Object> response = new HashMap<>();
-
-        if (deadline == null) {
-            // No deadline set - always allow push
-            response.put("hasDeadline", false);
-            response.put("canPush", true);
-            response.put("message", "No deadline set for this assignment");
-        } else {
-            LocalDateTime now = LocalDateTime.now();
-            boolean canPush = now.isBefore(deadline);
-
-            response.put("hasDeadline", true);
-            response.put("deadline", deadline.toString());
-            response.put("canPush", canPush);
-
-            if (canPush) {
-                response.put("message", "Deadline has not passed yet");
-            } else {
-                response.put("message", "Deadline has passed");
-            }
-        }
-
-        return ResponseEntity.ok(response);
-    }
-
-    @PostMapping("/update-score")
-    public ResponseEntity<Map<String, String>> updateScoreFromGithubAction(@RequestBody ScoreUpdateRequest request) {
-        assignmentService.updateStudentScore(request);
-
-        return ResponseEntity.ok(Map.of(
-                "status", "success",
-                "message", "Score updated successfully"
-        ));
     }
 
     @DeleteMapping("/{assignmentCode}")
@@ -392,21 +346,6 @@ public class AssignmentController {
                 user
         );
         return ResponseEntity.ok(comments);
-    }
-
-    @GetMapping("/{assignmentCode}/student/localPath")
-    public ResponseEntity<?> getStudentLocalPath(
-            @PathVariable String assignmentCode,
-            @RequestHeader("Authorization") String authHeader) {
-        String token = authHeader.substring(7);
-        User user = authService.getUserFromToken(token);
-        StudentAssignment studentAssignment = assignmentService.getStudentAssignmentInfo(assignmentCode, user);
-        String localPath = studentAssignment.getLocalPath();
-        return ResponseEntity.ok(Map.of(
-                "localPath", localPath,
-                "exists", !localPath.isBlank(),
-                "branchName", studentAssignment.getBranchName()
-        ));
     }
 
     @PatchMapping("/comments/{commentId}/resolve")

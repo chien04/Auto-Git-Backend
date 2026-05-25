@@ -14,6 +14,7 @@ public class SubmitResponse {
     private int memory;
     private String errorMessage;
     private double score;
+    private Double assignmentScore;
     private int passedTestCases;
     private int totalTestCases;
     private String status;

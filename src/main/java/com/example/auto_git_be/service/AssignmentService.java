@@ -2,16 +2,11 @@ package com.example.auto_git_be.service;
 
 import com.example.auto_git_be.dto.assignment.AssignmentTaskCreateRequest;
 import com.example.auto_git_be.dto.assignment.JoinAssignmentResponse;
-import com.example.auto_git_be.dto.assignment.ScoreUpdateRequest;
-import com.example.auto_git_be.dto.assignment.TaskDTO;
 import com.example.auto_git_be.dto.execute.TestCaseDTO;
 import com.example.auto_git_be.entity.*;
 import com.example.auto_git_be.repository.*;
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
-import okhttp3.internal.concurrent.Task;
 import org.kohsuke.github.GHRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,9 +14,7 @@ import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -35,9 +28,6 @@ public class AssignmentService {
     private final TeacherAssignmentRepository teacherAssignmentRepository;
     private final CommentRepository commentRepository;
     private final GitHubService gitHubService;
-    private final AssignmentWorkspaceService assignmentWorkspaceService;
-    private final TeacherAssignmentService teacherAssignmentService;
-    private final NotificationService notificationService;
     private static final String CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     private static final int CODE_LENGTH = 8;
     private static final SecureRandom random = new SecureRandom();
@@ -166,32 +156,6 @@ public class AssignmentService {
         return studentAssignmentRepository.findByAssignment(assignment);
     }
 
-    @Transactional(readOnly = true)
-    public String getStudentLocalPath(String assignmentCode, User user) {
-        Assignment assignment = getAssignmentByCode(assignmentCode);
-
-        Student student = studentRepository.findByUserAndClassRoom(user, assignment.getClassRoom())
-                .orElseThrow(() -> new RuntimeException("You must join the class before opening assignments"));
-
-        StudentAssignment studentAssignment = studentAssignmentRepository
-                .findByStudentAndAssignment(student, assignment)
-                .orElseThrow(() -> new RuntimeException("Student assignment not found"));
-
-        return studentAssignment.getLocalPath();
-    }
-
-    @Transactional(readOnly = true)
-    public StudentAssignment getStudentAssignmentInfo(String assignmentCode, User user) {
-        Assignment assignment = getAssignmentByCode(assignmentCode);
-
-        Student student = studentRepository.findByUserAndClassRoom(user, assignment.getClassRoom())
-                .orElseThrow(() -> new RuntimeException("You must join the class before opening assignments"));
-
-        return studentAssignmentRepository
-                .findByStudentAndAssignment(student, assignment)
-                .orElseThrow(() -> new RuntimeException("Student assignment not found"));
-    }
-
     @Transactional
     public void deleteAssignment(String assignmentCode, User teacher) {
         try {
@@ -277,92 +241,6 @@ public class AssignmentService {
 
         } catch (Exception e) {
             throw new RuntimeException("Failed to join assignment: " + e.getMessage(), e);
-        }
-    }
-
-    @Transactional
-    public void updateCommitCountForUser(String assignmentCode, User user) {
-        try {
-            Assignment assignment = getAssignmentByCode(assignmentCode);
-
-            List<Student> students = studentRepository.findByUser(user);
-
-            StudentAssignment studentAssignment = null;
-            for (Student student : students) {
-                Optional<StudentAssignment> optional = studentAssignmentRepository.findByStudentAndAssignment(student, assignment);
-                if (optional.isPresent()) {
-                    studentAssignment = optional.get();
-                    break;
-                }
-            }
-
-            if (studentAssignment == null) {
-                throw new EntityNotFoundException("StudentAssignment not found for user " + user.getEmail());
-            }
-
-            studentAssignment.setCommitCount(studentAssignment.getCommitCount() + 1);
-            studentAssignment.setLastCommitAt(LocalDateTime.now());
-            studentAssignmentRepository.save(studentAssignment);
-
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to update commit count: " + e.getMessage(), e);
-        }
-    }
-
-    @Transactional
-    public void updateStudentScore(ScoreUpdateRequest request) {
-        try {
-            String repoUrl = "https://github.com/" + request.getRepoFullName();
-            Assignment assignment = assignmentRepository.findByRepoUrl(repoUrl)
-                    .orElseThrow(() -> new RuntimeException("Assignment not found for repo: " + repoUrl));
-
-            StudentAssignment studentAssignment = studentAssignmentRepository
-                    .findByAssignmentAndBranchName(assignment, request.getBranchName())
-                    .orElseThrow(() -> new RuntimeException("Student assignment not found for branch: " + request.getBranchName()));
-
-            List<AssignmentTask> definedTasks = assignment.getTasks();
-
-
-            List<TaskDTO> taskDTOS = request.getDetails();
-            Map<Integer, TaskDTO> dtoMap = taskDTOS.stream()
-                    .collect(Collectors.toMap(TaskDTO::getOrderNo, dto -> dto));
-
-            Map<Long, StudentTaskResult> existingResultsMap = studentAssignment.getStudentTaskResults().stream()
-                    .collect(Collectors.toMap(result -> result.getAssignmentTask().getId(), result -> result));
-
-            for (AssignmentTask task : definedTasks) {
-                TaskDTO dto = dtoMap.get(task.getOrderNo());
-
-                if (dto != null) {
-                    StudentTaskResult taskResult = existingResultsMap.getOrDefault(task.getId(), new StudentTaskResult());
-
-                    taskResult.setStudentAssignment(studentAssignment);
-                    taskResult.setAssignmentTask(task);
-                    taskResult.setLanguage(dto.getLanguage());
-                    taskResult.setScore(dto.getScore());
-                    taskResult.setPass(dto.getPass());
-                    taskResult.setTotal(dto.getTotal());
-                    taskResult.setStatus(dto.getStatus());
-                    taskResult.setErrorMessage(dto.getErrorMessage());
-
-                    if (taskResult.getId() == null) {
-                        studentAssignment.getStudentTaskResults().add(taskResult);
-                    }
-                }
-            }
-
-            studentAssignment.setScore(request.getScore());
-            studentAssignmentRepository.save(studentAssignment);
-
-            notificationService.notifyStudentOnGraded(
-                    studentAssignment.getStudent().getUser().getId(),
-                    request.getScore(),
-                    assignment.getAssignmentCode(),
-                    assignment.getClassRoom().getClassCode()
-            );
-
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to update score: " + e.getMessage(), e);
         }
     }
 

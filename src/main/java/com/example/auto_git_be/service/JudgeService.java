@@ -16,9 +16,11 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -122,38 +124,11 @@ public class JudgeService {
     }
 
     @Transactional
-    public SubmitResponse submitCode(SubmitRequest request) {
-        Assignment assignment = assignmentRepository.findByAssignmentCode(request.getAssignmentCode())
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy Assignment: " + request.getAssignmentCode()));
-
-        AssignmentTask task = assignmentTaskRepository.findByAssignmentAndOrderNo(assignment, request.getTaskOrderNo())
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy Task số " + request.getTaskOrderNo()));
-
-        EvaluationResult evalResult = executeJudge0Evaluation(task, request.getLanguage(), request.getSourceCode());
-        int passed = evalResult.getPassed();
-        int total = evalResult.getTotal();
-        Double time = evalResult.getMaxTime();
-        int memory = evalResult.getMaxMemory();
-        String finalStatus = evalResult.getOverallStatus();
-        String finalErrorMessage = evalResult.getErrorMessage();
-
-        int score = (int) Math.round((double) passed / total * 100);
-
-        return SubmitResponse.builder()
-                .time(time)
-                .memory(memory)
-                .score(score)
-                .passedTestCases(passed)
-                .totalTestCases(total)
-                .status(finalStatus)
-                .errorMessage(finalErrorMessage)
-                .build();
-    }
-
-    @Transactional
     public SubmitResponse submitCodeForStudent(Student student, SubmitRequest request) throws IOException {
         Assignment assignment = assignmentRepository.findByAssignmentCode(request.getAssignmentCode())
                 .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy Assignment: " + request.getAssignmentCode()));
+
+        rejectStudentSubmitIfDeadlinePassed(assignment);
 
         AssignmentTask task = assignmentTaskRepository.findByAssignmentAndOrderNo(assignment, request.getTaskOrderNo())
                 .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy Task số " + request.getTaskOrderNo()));
@@ -195,15 +170,96 @@ public class JudgeService {
                 .build();
 
         studentTaskResultRepository.save(taskResult);
+        double assignmentScore = updateStudentAssignmentScore(studentAssignment, taskResult);
 
         return SubmitResponse.builder()
                 .score(score)
+                .assignmentScore(assignmentScore)
                 .passedTestCases(passed)
                 .totalTestCases(total)
                 .status(finalStatus)
                 .time(time)
                 .memory(memory)
                 .build();
+    }
+
+    public SubmitResponse submitCodeForTeacher(SubmitRequest request) throws IOException {
+        Assignment assignment = assignmentRepository.findByAssignmentCode(request.getAssignmentCode())
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy Assignment: " + request.getAssignmentCode()));
+
+        AssignmentTask task = assignmentTaskRepository.findByAssignmentAndOrderNo(assignment, request.getTaskOrderNo())
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy Task‘ " + request.getTaskOrderNo()));
+
+        EvaluationResult evalResult = executeJudge0Evaluation(task, request.getLanguage(), request.getSourceCode());
+        int passed = evalResult.getPassed();
+        int total = evalResult.getTotal();
+        Double time = evalResult.getMaxTime();
+        int memory = evalResult.getMaxMemory();
+        String finalStatus = evalResult.getOverallStatus();
+        String finalErrorMessage = evalResult.getErrorMessage();
+
+        double score = (double) passed / total * 10;
+
+        gitHubService.pushStudentCode(
+                assignment.getRepoName(),
+                "teacher",
+                request.getFilePath(),
+                request.getSourceCode(),
+                "Teacher submit task " + request.getTaskOrderNo() + " - Score: " + score
+        );
+
+        return SubmitResponse.builder()
+                .score(score)
+                .assignmentScore(score)
+                .passedTestCases(passed)
+                .totalTestCases(total)
+                .status(finalStatus)
+                .time(time)
+                .memory(memory)
+                .errorMessage(finalErrorMessage)
+                .build();
+    }
+
+    private void rejectStudentSubmitIfDeadlinePassed(Assignment assignment) {
+        LocalDateTime deadline = assignment.getDeadline();
+        if (deadline != null && LocalDateTime.now().isAfter(deadline)) {
+            throw new IllegalArgumentException("Đã quá deadline, không thể nộp bài nữa.");
+        }
+    }
+
+    private double updateStudentAssignmentScore(StudentAssignment studentAssignment, StudentTaskResult latestTaskResult) {
+        Assignment assignment = studentAssignment.getAssignment();
+        List<AssignmentTask> assignmentTasks = assignment.getTasks();
+        int totalTasks = assignmentTasks == null ? 0 : assignmentTasks.size();
+        if (totalTasks == 0) {
+            studentAssignment.setScore(0.0);
+            studentAssignmentRepository.save(studentAssignment);
+            return 0.0;
+        }
+
+        List<StudentTaskResult> allResults = new ArrayList<>(studentTaskResultRepository.findByStudentAssignment(studentAssignment));
+        allResults.add(latestTaskResult);
+
+        Map<Long, Double> bestScoreByTaskId = allResults.stream()
+                .filter(result -> result.getAssignmentTask() != null && result.getScore() != null)
+                .collect(Collectors.groupingBy(
+                        result -> result.getAssignmentTask().getId(),
+                        Collectors.mapping(
+                                StudentTaskResult::getScore,
+                                Collectors.collectingAndThen(
+                                        Collectors.maxBy(Double::compareTo),
+                                        maxScore -> maxScore.orElse(0.0)
+                                )
+                        )
+                ));
+
+        double earnedScore = assignmentTasks.stream()
+                .mapToDouble(task -> bestScoreByTaskId.getOrDefault(task.getId(), 0.0))
+                .sum();
+        double assignmentScore = earnedScore / totalTasks;
+        studentAssignment.setScore(assignmentScore);
+        studentAssignmentRepository.save(studentAssignment);
+        return assignmentScore;
     }
 
     private EvaluationResult executeJudge0Evaluation(AssignmentTask task, String language, String sourceCode) {

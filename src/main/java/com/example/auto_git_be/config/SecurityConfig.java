@@ -32,7 +32,6 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/health").permitAll()
-                .requestMatchers("/api/assignment/update-score").permitAll()
                 .requestMatchers("/api/ai/test-vector-score").permitAll()
                 .requestMatchers("/api/test-cases/*/task/*/download").permitAll()
                 .requestMatchers("/ws-notifications/**").permitAll()

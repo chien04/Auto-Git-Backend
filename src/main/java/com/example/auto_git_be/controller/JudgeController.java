@@ -45,7 +45,6 @@ public class JudgeController {
         String token = authHeader.substring(7);
         User user = authService.getUserFromToken(token);
 
-        SubmitResponse response;
         Assignment assignment = assignmentRepository.findByAssignmentCode(request.getAssignmentCode())
                 .orElseThrow(() -> new EntityNotFoundException("Assignment not found"));
 
@@ -54,11 +53,16 @@ public class JudgeController {
         if("STUDENT".equals(user.getRole().name())){
             Student student = studentRepository.findByUserAndClassRoom(user, classRoom)
                     .orElseThrow(() -> new EntityNotFoundException("Student not found"));
-            response = judgeService.submitCodeForStudent(student, request);
+            return ResponseEntity.ok(judgeService.submitCodeForStudent(student, request));
         }
-        else
-            response = judgeService.submitCode(request);
 
-        return ResponseEntity.ok(response);
+        if ("TEACHER".equals(user.getRole().name())) {
+            if (!classRoom.getTeacher().getId().equals(user.getId())) {
+                return ResponseEntity.status(403).build();
+            }
+            return ResponseEntity.ok(judgeService.submitCodeForTeacher(request));
+        }
+
+        return ResponseEntity.status(403).build();
     }
 }

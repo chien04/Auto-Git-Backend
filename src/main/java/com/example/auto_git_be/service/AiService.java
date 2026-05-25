@@ -230,7 +230,15 @@ public class AiService {
                         .append("\n```\n</file>\n\n");
             }
         }
-        currentPrompt.append("User's question:\n").append(userQuestion);
+        currentPrompt.append("""
+                Tutor response safety rules for this answer:
+                - Do not provide corrected code, full solution code, pseudocode, or code blocks.
+                - Do not rewrite the student's code into a working version.
+                - Only explain the issue, why it happens, and give conceptual hints.
+                - If the user asks for the answer, refuse the full solution and give hints instead.
+
+                User's question:
+                """).append(userQuestion);
         messages.add(new UserMessage(currentPrompt.toString()));
 
         return messages;

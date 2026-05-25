@@ -59,25 +59,6 @@ public class ClassController {
         return ResponseEntity.ok(response);
     }
 
-    @GetMapping("/{classCode}")
-    public ResponseEntity<Map<String, Object>> getClassInfo(
-            @PathVariable String classCode,
-            @RequestHeader("Authorization") String authHeader) {
-        String token = authHeader.substring(7);
-        authService.getUserFromToken(token);
-
-        ClassRoom classRoom = classRoomService.getClassByCode(classCode);
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("classId", classRoom.getId());
-        response.put("className", classRoom.getName());
-        response.put("classCode", classRoom.getClassCode());
-        response.put("teacherName", classRoom.getTeacher().getName());
-        response.put("isActive", classRoom.getIsActive());
-
-        return ResponseEntity.ok(response);
-    }
-
     @GetMapping("/{classCode}/students")
     public ResponseEntity<List<Map<String, Object>>> getStudents(
             @PathVariable String classCode) {

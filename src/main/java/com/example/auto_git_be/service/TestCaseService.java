@@ -169,7 +169,7 @@ public class TestCaseService {
                 }
 
                 String entryName = entry.getName();
-                if (entryName == null || entryName.isBlank()) {
+                if (entryName.isBlank()) {
                     throw new RuntimeException("ZIP task " + taskOrderNo + " khong hop le: ten file rong");
                 }
 

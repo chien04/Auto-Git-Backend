@@ -32,7 +32,6 @@ public class ClassRoomService {
 
     private final ClassRoomRepository classRoomRepository;
     private final StudentRepository studentRepository;
-    private final GitHubService gitHubService;
     private final AssignmentRepository assignmentRepository;
     private final StudentAssignmentRepository studentAssignmentRepository;
     private final TeacherAssignmentRepository teacherAssignmentRepository;
